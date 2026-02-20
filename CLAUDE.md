@@ -13,6 +13,10 @@
 - `src/tuya_agent/auth.py` handles HMAC-SHA256 request signing and token lifecycle
 - `src/tuya_agent/devices.py`, `src/tuya_agent/logs.py`, `src/tuya_agent/scenes.py`, `src/tuya_agent/events.py` are domain mixins attached to the client
 - `src/tuya_agent/tools.py` provides the agent-facing tool registry and `dispatch()` entry point
+- `src/tuya_agent/storage.py` is the SQLite storage layer for persisting device logs with deduplication
+- `src/tuya_agent/collector.py` orchestrates periodic API-based log collection across all devices
+- `src/tuya_agent/watcher.py` streams real-time Pulsar WebSocket events into SQLite storage
+- `src/tuya_agent/__main__.py` is the CLI entry point with `collect`, `watch`, and `status` subcommands
 - You SHOULD follow the existing pattern where each test file mirrors a source module (e.g. `tests/test_auth.py` tests `src/tuya_agent/auth.py`)
 
 ## Code Standards
@@ -42,4 +46,4 @@
 - You MUST add or update tests in `tests/` for any new or changed functionality
 - You MUST use `pytest-httpx` to mock HTTP interactions; instead of real API calls, use `httpx_mock` fixtures
 - You SHOULD maintain test coverage for auth signing, client token flow, and tool registry integrity
-- You MUST mark async test functions with `@pytest.mark.asyncio`
+- You MUST mark async test functions with the `pytest.mark.asyncio` decorator
