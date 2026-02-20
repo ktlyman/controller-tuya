@@ -30,6 +30,7 @@ class TestToolsRegistry:
             "enable_automation",
             "disable_automation",
             "collect_realtime_events",
+            "watch_realtime_events",
             "collect_logs",
             "get_collection_status",
         }

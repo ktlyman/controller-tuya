@@ -609,6 +609,60 @@ async def get_collection_status(
 
 
 # ---------------------------------------------------------------------------
+# Real-time watcher tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "watch_realtime_events",
+        "description": (
+            "Subscribe to real-time Tuya Pulsar events and store them in "
+            "a local SQLite database. Returns event summaries after the "
+            "specified duration."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "db_path": {
+                    "type": "string",
+                    "description": (
+                        "Path to the SQLite database (default: tuya_logs.db)."
+                    ),
+                },
+                "duration_seconds": {
+                    "type": "number",
+                    "description": (
+                        "How long to listen for events in seconds (default: 60)."
+                    ),
+                },
+            },
+        },
+    }
+)
+async def watch_realtime_events(
+    client: TuyaClient,
+    db_path: str = "tuya_logs.db",
+    duration_seconds: float = 60,
+) -> dict[str, Any]:
+    from pathlib import Path
+
+    from tuya_agent.storage import LogStorage
+    from tuya_agent.watcher import EventWatcher
+
+    with LogStorage(Path(db_path)) as storage:
+        watcher = EventWatcher(client, storage)
+        summaries = await watcher.run_with_callback(
+            duration=duration_seconds,
+        )
+    return {
+        "events_stored": watcher.count,
+        "duration_seconds": duration_seconds,
+        "events": summaries,
+    }
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 

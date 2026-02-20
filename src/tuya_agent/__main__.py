@@ -3,6 +3,7 @@
 Usage::
 
     python -m tuya_agent collect [--daemon] [--interval 21600] [--db tuya_logs.db]
+    python -m tuya_agent watch   [--db tuya_logs.db] [--duration SECONDS]
     python -m tuya_agent status  [--db tuya_logs.db]
 """
 
@@ -18,6 +19,7 @@ from pathlib import Path
 from tuya_agent.client import TuyaClient
 from tuya_agent.collector import CollectorConfig, LogCollector
 from tuya_agent.storage import LogStorage
+from tuya_agent.watcher import EventWatcher
 
 
 def main() -> None:
@@ -54,6 +56,19 @@ def main() -> None:
         help="Comma-separated event type codes",
     )
 
+    # -- watch ---------------------------------------------------------------
+    watch_p = sub.add_parser(
+        "watch", help="Stream real-time device events into SQLite",
+    )
+    watch_p.add_argument(
+        "--db", type=Path, default=Path("tuya_logs.db"),
+        help="SQLite database path (default: tuya_logs.db)",
+    )
+    watch_p.add_argument(
+        "--duration", type=float, default=None,
+        help="Stop after N seconds (default: run forever)",
+    )
+
     # -- status --------------------------------------------------------------
     status_p = sub.add_parser("status", help="Show collection status")
     status_p.add_argument(
@@ -73,6 +88,8 @@ def main() -> None:
 
     if args.command == "collect":
         asyncio.run(_run_collect(args))
+    elif args.command == "watch":
+        asyncio.run(_run_watch(args))
     elif args.command == "status":
         _run_status(args)
 
@@ -99,6 +116,33 @@ async def _run_collect(args: argparse.Namespace) -> None:
                 if result.errors:
                     for err in result.errors:
                         print(f"  Error: {err}")
+
+
+async def _run_watch(args: argparse.Namespace) -> None:
+    import websockets
+
+    with LogStorage(args.db) as storage:
+        async with TuyaClient() as client:
+            watcher = EventWatcher(client, storage)
+            label = (
+                f"{args.duration:.0f}s" if args.duration else "indefinitely"
+            )
+            print(f"Watching real-time events ({label}) — Ctrl+C to stop")
+            try:
+                count = await watcher.run(duration=args.duration)
+            except KeyboardInterrupt:
+                count = watcher.count
+            except websockets.exceptions.InvalidStatus as exc:
+                if exc.response.status_code == 401:
+                    print(
+                        "\nError: Pulsar returned 401 Unauthorized.\n"
+                        "Make sure the Message Service is enabled in your "
+                        "Tuya cloud project\nand that message rules are "
+                        "active for your data center region."
+                    )
+                    sys.exit(1)
+                raise
+            print(f"\nDone — {count} events stored to {args.db}")
 
 
 def _run_status(args: argparse.Namespace) -> None:

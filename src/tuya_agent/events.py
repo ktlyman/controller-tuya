@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
 import websockets
+from Crypto.Cipher import AES
 from websockets.asyncio.client import ClientConnection
 
 if TYPE_CHECKING:
@@ -44,16 +45,19 @@ class EventsMixin:
         topic = "event"
         return (
             f"{config.pulsar_url}ws/v2/consumer/persistent/"
-            f"{config.access_id}/out/{topic}/{topic}"
-            f"-sub?ackTimeoutMillis=3000"
+            f"{config.access_id}/out/{topic}/"
+            f"{config.access_id}-sub"
+            f"?ackTimeoutMillis=3000&subscriptionType=Failover"
         )
 
     def _ws_headers(self) -> dict[str, str]:
         config = self._client.config
         password = _ws_password(config.access_id, config.access_secret)
-        username = config.access_id
-        token = base64.b64encode(f"{username}:{password}".encode()).decode()
-        return {"Authorization": f"Basic {token}"}
+        return {
+            "Connection": "Upgrade",
+            "username": config.access_id,
+            "password": password,
+        }
 
     async def subscribe(
         self,
@@ -70,13 +74,14 @@ class EventsMixin:
         url = self._build_ws_url()
         headers = self._ws_headers()
 
+        secret = self._client.config.access_secret
         count = 0
         async for ws in websockets.connect(url, additional_headers=headers):
             try:
                 async for raw_msg in ws:
                     try:
                         msg = json.loads(raw_msg)
-                        event = _decode_message(msg)
+                        event = _decode_message(msg, access_secret=secret)
                     except Exception:
                         logger.warning("Failed to decode Pulsar message", exc_info=True)
                         await _ack(ws, msg.get("messageId", ""))
@@ -121,19 +126,42 @@ class EventsMixin:
 
 
 def _ws_password(access_id: str, access_secret: str) -> str:
-    """Compute the Pulsar WebSocket password as md5(access_id + md5(access_secret))."""
-    secret_hash = hashlib.md5(access_secret.encode()).hexdigest()[8:24]
+    """Compute the Pulsar WebSocket password as md5(access_id + md5(access_secret))[8:24]."""
+    secret_hash = hashlib.md5(access_secret.encode()).hexdigest()
     return hashlib.md5((access_id + secret_hash).encode()).hexdigest()[8:24]
 
 
-def _decode_message(msg: dict[str, Any]) -> TuyaEvent | None:
+def _decrypt_payload(payload_b64: str, access_secret: str) -> str:
+    """Decrypt an AES-ECB-encrypted Pulsar payload.
+
+    The key is ``access_secret[8:24]`` (16 bytes for AES-128).
+    The ciphertext is base64-encoded and PKCS7-padded.
+    """
+    raw = base64.b64decode(payload_b64)
+    key = access_secret[8:24].encode("utf-8")
+    cipher = AES.new(key, AES.MODE_ECB)
+    plaintext = cipher.decrypt(raw)
+    # Strip PKCS7 padding.
+    pad_len = plaintext[-1]
+    return plaintext[:-pad_len].decode("utf-8")
+
+
+def _decode_message(
+    msg: dict[str, Any],
+    access_secret: str | None = None,
+) -> TuyaEvent | None:
     payload_b64 = msg.get("payload")
     if not payload_b64:
         return None
     try:
-        payload_bytes = base64.b64decode(payload_b64)
-        payload = json.loads(payload_bytes)
+        if access_secret:
+            payload_str = _decrypt_payload(payload_b64, access_secret)
+        else:
+            # Fallback for unencrypted payloads (e.g. in tests).
+            payload_str = base64.b64decode(payload_b64).decode("utf-8")
+        payload = json.loads(payload_str)
     except Exception:
+        logger.warning("Failed to decrypt/decode Pulsar payload", exc_info=True)
         return None
 
     data = payload.get("data", {})
