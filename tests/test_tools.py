@@ -30,6 +30,8 @@ class TestToolsRegistry:
             "enable_automation",
             "disable_automation",
             "collect_realtime_events",
+            "collect_logs",
+            "get_collection_status",
         }
         assert expected.issubset(names), f"Missing tools: {expected - names}"
 

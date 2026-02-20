@@ -25,7 +25,7 @@ class DevicesMixin:
         Returns a dict with ``list`` (device records) and ``last_row_key``
         for pagination.
         """
-        params: dict[str, Any] = {"size": page_size}
+        params: dict[str, Any] = {"page_size": page_size}
         if last_row_key:
             params["last_row_key"] = last_row_key
         return await self._client.request("GET", "/v2.0/cloud/thing/device", params=params)

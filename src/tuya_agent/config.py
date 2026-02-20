@@ -23,7 +23,7 @@ _PULSAR_URLS: dict[str, str] = {
 class TuyaConfig(BaseSettings):
     """Tuya Cloud API configuration loaded from environment variables."""
 
-    model_config = {"env_prefix": "TUYA_"}
+    model_config = {"env_prefix": "TUYA_", "env_file": ".env"}
 
     access_id: str
     access_secret: str

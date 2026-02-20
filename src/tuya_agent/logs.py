@@ -34,7 +34,7 @@ class LogsMixin:
         Times are 13-digit Unix timestamps in milliseconds.
         """
         params: dict[str, Any] = {
-            "event_types": event_types,
+            "type": event_types,
             "start_time": start_time,
             "end_time": end_time,
             "size": page_size,
@@ -42,7 +42,7 @@ class LogsMixin:
         if last_row_key:
             params["last_row_key"] = last_row_key
         return await self._client.request(
-            "GET", f"/v1.0/iot-03/devices/{device_id}/logs", params=params
+            "GET", f"/v1.0/devices/{device_id}/logs", params=params
         )
 
     # -- Data-point status history -------------------------------------------

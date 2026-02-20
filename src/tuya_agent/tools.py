@@ -524,6 +524,91 @@ async def collect_realtime_events(
 
 
 # ---------------------------------------------------------------------------
+# Log collector tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "collect_logs",
+        "description": (
+            "Trigger a one-shot collection of device event logs from all devices. "
+            "Stores logs in a local SQLite database for long-term retention."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "db_path": {
+                    "type": "string",
+                    "description": "Path to SQLite database (default: tuya_logs.db).",
+                },
+                "lookback_days": {
+                    "type": "integer",
+                    "description": (
+                        "Days to look back on first collection (default: 7)."
+                    ),
+                },
+            },
+        },
+    }
+)
+async def collect_logs(
+    client: TuyaClient,
+    db_path: str = "tuya_logs.db",
+    lookback_days: int = 7,
+) -> dict[str, Any]:
+    from pathlib import Path
+
+    from tuya_agent.collector import CollectorConfig, LogCollector
+    from tuya_agent.storage import LogStorage
+
+    config = CollectorConfig(lookback_days=lookback_days)
+    with LogStorage(Path(db_path)) as storage:
+        collector = LogCollector(client, storage, config)
+        result = await collector.collect_all()
+    return {
+        "devices_found": result.devices_found,
+        "devices_collected": result.devices_collected,
+        "logs_collected": result.logs_collected,
+        "duration_seconds": result.duration_seconds,
+        "errors": result.errors,
+    }
+
+
+@_register(
+    {
+        "name": "get_collection_status",
+        "description": (
+            "Get statistics about the local log collection database "
+            "including total logs stored and per-device bookmark status."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "db_path": {
+                    "type": "string",
+                    "description": "Path to SQLite database (default: tuya_logs.db).",
+                },
+            },
+        },
+    }
+)
+async def get_collection_status(
+    client: TuyaClient,
+    db_path: str = "tuya_logs.db",
+) -> dict[str, Any]:
+    from pathlib import Path
+
+    from tuya_agent.storage import LogStorage
+
+    with LogStorage(Path(db_path)) as storage:
+        stats = storage.get_stats()
+        bookmarks = storage.get_all_bookmarks()
+    stats["bookmarks"] = {did: ts for did, ts in bookmarks}
+    return stats
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 

@@ -7,5 +7,6 @@ build/
 .venv/
 venv/
 *.log
+*.db
 .ruff_cache/
 .pytest_cache/
