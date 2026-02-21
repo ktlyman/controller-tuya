@@ -1681,9 +1681,13 @@ const pages = {
       btn.disabled = true;
 
       try {
-        // Send BLE unlock check command to unlock the door.
+        // Send BLE unlock check command with its current status value.
+        const cached = state.deviceStatus[deviceId];
+        const statusMap = {};
+        if (cached) cached.status.forEach((dp) => { statusMap[dp.code] = dp.value; });
+        const bleVal = statusMap.ble_unlock_check || '';
         await api.post(`/api/devices/${deviceId}/commands`, {
-          commands: [{ code: 'ble_unlock_check', value: true }],
+          commands: [{ code: 'ble_unlock_check', value: bleVal }],
         });
 
         btn.classList.add('unlocked');
