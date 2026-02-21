@@ -161,9 +161,16 @@ body {
   margin-top: 4px;
 }
 
-/* ── Location Groups ── */
+/* ── Location Groups — side-by-side layout ── */
+.locations-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
 .location-group {
-  margin-bottom: 28px;
+  min-width: 0;
 }
 
 .location-group-header {
@@ -189,19 +196,21 @@ body {
   border-radius: 10px;
 }
 
-/* ── Cards Grid ── */
+/* ── Cards Grid — 2 columns inside each location group ── */
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 14px;
+  min-height: 40px;
 }
 
 .card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 20px;
+  padding: 16px;
   transition: border-color var(--transition), box-shadow var(--transition);
+  cursor: grab;
 }
 
 .card:hover {
@@ -209,12 +218,23 @@ body {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
+/* ── Drag-and-drop states ── */
+.card.dragging {
+  opacity: 0.4;
+  cursor: grabbing;
+}
+
+.card.drag-over {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
 /* ── Device Card ── */
 .device-header {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 .status-dot {
@@ -228,7 +248,7 @@ body {
 .status-dot.offline { background: var(--danger); box-shadow: 0 0 6px rgba(239, 68, 68, 0.3); }
 
 .device-name {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text);
   flex: 1;
@@ -268,9 +288,9 @@ body {
 
 .device-id {
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 11px;
   color: var(--text-secondary);
-  margin-bottom: 14px;
+  margin-bottom: 10px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -331,7 +351,7 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px solid var(--border);
 }
 
@@ -339,7 +359,7 @@ body {
 
 .toggle-label {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
 }
 
@@ -390,22 +410,23 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
 }
 
 .dp-row:last-child { border-bottom: none; }
 
 .dp-code {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text);
-  min-width: 100px;
+  min-width: 80px;
 }
 
 .dp-value {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--text-secondary);
   flex: 1;
   overflow: hidden;
@@ -650,9 +671,9 @@ td.mono {
 
 /* ── Device DPs Area ── */
 .device-dps {
-  margin-top: 14px;
+  margin-top: 10px;
   border-top: 1px solid var(--border);
-  padding-top: 12px;
+  padding-top: 8px;
 }
 
 /* ── Toast ── */
@@ -695,8 +716,9 @@ td.mono {
 
 .loading {
   text-align: center;
-  padding: 32px;
+  padding: 20px;
   color: var(--text-secondary);
+  font-size: 13px;
 }
 
 .section-title {
@@ -757,7 +779,7 @@ td.mono {
         <h2>Devices</h2>
         <p>Manage and control your connected devices</p>
       </div>
-      <div id="devices-grid" class="card-grid"></div>
+      <div id="devices-grid"></div>
     </section>
 
     <!-- SCENES PAGE -->
@@ -860,6 +882,10 @@ function esc(str) {
   return d.innerHTML;
 }
 
+function deviceName(d) {
+  return d.customName || d.custom_name || d.name || d.id;
+}
+
 function formatTime(ms) {
   if (!ms) return '---';
   const d = new Date(typeof ms === 'number' ? ms : ms);
@@ -889,6 +915,39 @@ function eventTypeColor(type) {
     data_report: '#a78bfa',
   };
   return colors[type] || '#eab308';
+}
+
+/* ─────────────────────── Card Order Persistence ─────────────────────── */
+const CARD_ORDER_KEY = 'tuya_card_order';
+
+function loadCardOrder() {
+  try {
+    const raw = localStorage.getItem(CARD_ORDER_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveCardOrder(spaceId, deviceIds) {
+  const orders = loadCardOrder();
+  orders[spaceId] = deviceIds;
+  localStorage.setItem(CARD_ORDER_KEY, JSON.stringify(orders));
+}
+
+function applyCardOrder(spaceId, devices) {
+  const orders = loadCardOrder();
+  const order = orders[spaceId];
+  if (!order || !order.length) return devices;
+
+  const map = {};
+  devices.forEach((d) => { map[d.id] = d; });
+
+  const ordered = [];
+  order.forEach((id) => {
+    if (map[id]) { ordered.push(map[id]); delete map[id]; }
+  });
+  // Append any new devices not in saved order.
+  Object.values(map).forEach((d) => ordered.push(d));
+  return ordered;
 }
 
 /* ─────────────────────────── API ─────────────────────────── */
@@ -930,49 +989,54 @@ const pages = {
       const ids = new Set();
       state.devices.forEach((d) => {
         const sid = d.bindSpaceId || d.bind_space_id;
-        if (sid && !state.spaces[sid]) ids.add(sid);
+        if (sid && !state.spaces[sid]) ids.add(String(sid));
       });
-      const fetches = [...ids].map(async (sid) => {
+      await Promise.all([...ids].map(async (sid) => {
         try {
-          const info = await api.get(`/api/spaces/${sid}`);
-          state.spaces[sid] = info.name || sid;
+          const info = await api.get('/api/spaces/' + encodeURIComponent(sid));
+          if (info && info.name) {
+            state.spaces[sid] = info.name;
+          } else {
+            state.spaces[sid] = sid;
+          }
         } catch {
           state.spaces[sid] = sid;
         }
-      });
-      await Promise.all(fetches);
+      }));
     },
 
     render() {
-      const grid = document.getElementById('devices-grid');
+      const container = document.getElementById('devices-grid');
       if (!state.devices.length) {
-        grid.innerHTML = '<div class="empty-state">No devices found</div>';
+        container.innerHTML = '<div class="empty-state">No devices found</div>';
         return;
       }
 
       // Group devices by location (bindSpaceId).
-      const groups = {};
+      const groupMap = {};
+      const groupOrder = [];
       state.devices.forEach((d) => {
-        const sid = d.bindSpaceId || d.bind_space_id || '_ungrouped';
-        if (!groups[sid]) groups[sid] = [];
-        groups[sid].push(d);
+        const sid = String(d.bindSpaceId || d.bind_space_id || '_ungrouped');
+        if (!groupMap[sid]) { groupMap[sid] = []; groupOrder.push(sid); }
+        groupMap[sid].push(d);
       });
 
-      let html = '';
-      for (const [sid, devices] of Object.entries(groups)) {
+      let html = '<div class="locations-container">';
+      for (const sid of groupOrder) {
+        const devices = applyCardOrder(sid, groupMap[sid]);
         const spaceName = state.spaces[sid] || (sid === '_ungrouped' ? 'Other' : sid);
         html += `
-          <div class="location-group">
+          <div class="location-group" data-space-id="${esc(sid)}">
             <div class="location-group-header">
               <h3>${esc(spaceName)}</h3>
               <span class="location-count">${devices.length} device${devices.length !== 1 ? 's' : ''}</span>
             </div>
-            <div class="card-grid">`;
+            <div class="card-grid" data-space-id="${esc(sid)}">`;
         devices.forEach((d) => {
-          const name = esc(d.customName || d.custom_name || d.name || d.id);
+          const name = esc(deviceName(d));
           const online = d.isOnline === true || d.online === true;
           html += `
-              <div class="card" id="device-card-${esc(d.id)}">
+              <div class="card" draggable="true" data-device-id="${esc(d.id)}" id="device-card-${esc(d.id)}">
                 <div class="device-header">
                   <span class="status-dot ${online ? 'online' : 'offline'}"></span>
                   <span class="device-name" title="${name}">${name}</span>
@@ -980,7 +1044,7 @@ const pages = {
                 </div>
                 <div class="device-id" title="${esc(d.id)}">${esc(d.id)}</div>
                 <div class="device-dps" id="dps-${esc(d.id)}">
-                  <div class="loading">Loading status…</div>
+                  <div class="loading">Loading status...</div>
                 </div>
               </div>`;
         });
@@ -988,18 +1052,82 @@ const pages = {
             </div>
           </div>`;
       }
-      grid.innerHTML = html;
+      html += '</div>';
+      container.innerHTML = html;
+
+      // Wire up drag-and-drop on all card grids.
+      container.querySelectorAll('.card-grid[data-space-id]').forEach((grid) => {
+        this.initDragDrop(grid);
+      });
+    },
+
+    /* ── Drag-and-Drop ── */
+    initDragDrop(grid) {
+      let draggedCard = null;
+
+      grid.addEventListener('dragstart', (e) => {
+        const card = e.target.closest('.card[draggable]');
+        if (!card) return;
+        draggedCard = card;
+        card.classList.add('dragging');
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', card.dataset.deviceId);
+      });
+
+      grid.addEventListener('dragend', (e) => {
+        const card = e.target.closest('.card[draggable]');
+        if (card) card.classList.remove('dragging');
+        grid.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+        draggedCard = null;
+      });
+
+      grid.addEventListener('dragover', (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        const target = e.target.closest('.card[draggable]');
+        grid.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+        if (target && target !== draggedCard) {
+          target.classList.add('drag-over');
+        }
+      });
+
+      grid.addEventListener('dragleave', (e) => {
+        const target = e.target.closest('.card[draggable]');
+        if (target) target.classList.remove('drag-over');
+      });
+
+      grid.addEventListener('drop', (e) => {
+        e.preventDefault();
+        grid.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
+        if (!draggedCard) return;
+
+        const target = e.target.closest('.card[draggable]');
+        if (!target || target === draggedCard) return;
+
+        // Determine position: insert before or after target.
+        const rect = target.getBoundingClientRect();
+        const midY = rect.top + rect.height / 2;
+        if (e.clientY < midY) {
+          grid.insertBefore(draggedCard, target);
+        } else {
+          grid.insertBefore(draggedCard, target.nextSibling);
+        }
+
+        // Persist the new order.
+        const spaceId = grid.dataset.spaceId;
+        const newOrder = [...grid.querySelectorAll('.card[data-device-id]')]
+          .map((c) => c.dataset.deviceId);
+        saveCardOrder(spaceId, newOrder);
+      });
     },
 
     autoLoadStatus() {
-      // Load status for every device in parallel without blocking render.
       state.devices.forEach((d) => this.loadStatus(d.id));
     },
 
     async loadStatus(deviceId) {
       const dpsEl = document.getElementById('dps-' + deviceId);
       if (!dpsEl) return;
-      dpsEl.innerHTML = '<div class="loading">Loading…</div>';
 
       try {
         const [statusData, funcData] = await Promise.all([
@@ -1051,9 +1179,9 @@ const pages = {
           }
         });
 
-        dpsEl.innerHTML = html || '<div class="empty-state" style="padding:12px;">No data points</div>';
+        dpsEl.innerHTML = html || '<div class="empty-state" style="padding:8px;">No data points</div>';
       } catch (e) {
-        dpsEl.innerHTML = `<div class="empty-state" style="color:var(--danger);">Error: ${esc(e.message)}</div>`;
+        dpsEl.innerHTML = `<div class="empty-state" style="color:var(--danger);padding:8px;">Error: ${esc(e.message)}</div>`;
       }
     },
 
@@ -1146,7 +1274,7 @@ const pages = {
       const existing = sel.value;
       sel.innerHTML = '<option value="">All Devices</option>' +
         state.devices.map((d) => {
-          const label = d.customName || d.custom_name || d.name || d.id;
+          const label = deviceName(d);
           return `<option value="${esc(d.id)}">${esc(label)}</option>`;
         }).join('');
       sel.value = existing;
@@ -1189,7 +1317,7 @@ const pages = {
         }
 
         const deviceMap = {};
-        state.devices.forEach((d) => { deviceMap[d.id] = d.customName || d.custom_name || d.name || d.id; });
+        state.devices.forEach((d) => { deviceMap[d.id] = deviceName(d); });
 
         let html = `<div class="table-wrap"><table>
           <thead><tr><th>Time</th><th>Device</th><th>Code</th><th>Value</th><th>Source</th></tr></thead>

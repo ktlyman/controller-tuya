@@ -8,5 +8,8 @@ build/
 venv/
 *.log
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
 .ruff_cache/
 .pytest_cache/
