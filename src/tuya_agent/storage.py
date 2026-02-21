@@ -8,6 +8,7 @@ import sqlite3
 import time
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -208,6 +209,75 @@ class LogStorage:
             (now_ms, devices, logs, status, run_id),
         )
         self.conn.commit()
+
+    # -- Query helpers -------------------------------------------------------
+
+    def query_logs(
+        self,
+        *,
+        device_id: str | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
+        code: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query device_logs with optional filters.
+
+        Returns ``(rows_as_dicts, total_count)``.
+        """
+        clauses: list[str] = []
+        params: list[Any] = []
+        if device_id:
+            clauses.append("device_id = ?")
+            params.append(device_id)
+        if start_time is not None:
+            clauses.append("event_time >= ?")
+            params.append(start_time)
+        if end_time is not None:
+            clauses.append("event_time <= ?")
+            params.append(end_time)
+        if code:
+            clauses.append("code = ?")
+            params.append(code)
+
+        where = " AND ".join(clauses) if clauses else "1=1"
+
+        total: int = self.conn.execute(
+            f"SELECT COUNT(*) FROM device_logs WHERE {where}",
+            params,
+        ).fetchone()[0]
+
+        cols = (
+            "device_id, event_id, event_time, event_from, "
+            "code, value, status"
+        )
+        rows = self.conn.execute(
+            f"SELECT {cols} FROM device_logs "
+            f"WHERE {where} ORDER BY event_time DESC "
+            f"LIMIT ? OFFSET ?",
+            [*params, limit, offset],
+        ).fetchall()
+
+        columns = [
+            "device_id", "event_id", "event_time",
+            "event_from", "code", "value", "status",
+        ]
+        return [dict(zip(columns, r)) for r in rows], total
+
+    def get_runs(self, limit: int = 50) -> list[dict[str, Any]]:
+        """Return recent collection runs."""
+        rows = self.conn.execute(
+            "SELECT id, started_at, finished_at, devices_count, "
+            "logs_collected, status FROM collection_runs "
+            "ORDER BY id DESC LIMIT ?",
+            (limit,),
+        ).fetchall()
+        columns = [
+            "id", "started_at", "finished_at",
+            "devices_count", "logs_collected", "status",
+        ]
+        return [dict(zip(columns, r)) for r in rows]
 
     # -- Stats ---------------------------------------------------------------
 

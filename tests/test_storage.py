@@ -102,3 +102,90 @@ class TestLogStorage:
         assert record.event_id == 7
         assert record.code == "switch_1"
         assert record.value == "true"
+
+    # -- query_logs ----------------------------------------------------------
+
+    def test_query_logs_returns_all(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            storage.insert_logs([
+                _make_record(device_id="d1", event_id=1),
+                _make_record(device_id="d2", event_id=2),
+            ])
+            rows, total = storage.query_logs()
+            assert total == 2
+            assert len(rows) == 2
+
+    def test_query_logs_filter_by_device(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            storage.insert_logs([
+                _make_record(device_id="d1", event_id=1),
+                _make_record(device_id="d2", event_id=2),
+            ])
+            rows, total = storage.query_logs(device_id="d1")
+            assert total == 1
+            assert rows[0]["device_id"] == "d1"
+
+    def test_query_logs_filter_by_code(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            storage.insert_logs([
+                _make_record(event_id=1, code="switch_1"),
+                _make_record(event_id=2, code="temp_current"),
+            ])
+            rows, total = storage.query_logs(code="temp_current")
+            assert total == 1
+            assert rows[0]["code"] == "temp_current"
+
+    def test_query_logs_filter_by_time_range(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            storage.insert_logs([
+                _make_record(event_id=1, event_time=1000),
+                _make_record(event_id=2, event_time=2000),
+                _make_record(event_id=3, event_time=3000),
+            ])
+            rows, total = storage.query_logs(
+                start_time=1500, end_time=2500,
+            )
+            assert total == 1
+            assert rows[0]["event_time"] == 2000
+
+    def test_query_logs_pagination(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            storage.insert_logs([
+                _make_record(event_id=i, event_time=1000 + i)
+                for i in range(5)
+            ])
+            rows, total = storage.query_logs(limit=2, offset=0)
+            assert total == 5
+            assert len(rows) == 2
+
+    def test_query_logs_empty(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            rows, total = storage.query_logs()
+            assert total == 0
+            assert rows == []
+
+    # -- get_runs ------------------------------------------------------------
+
+    def test_get_runs_returns_completed(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            rid = storage.record_run_start()
+            storage.record_run_end(rid, devices=2, logs=10)
+            runs = storage.get_runs()
+            assert len(runs) == 1
+            assert runs[0]["status"] == "completed"
+            assert runs[0]["devices_count"] == 2
+            assert runs[0]["logs_collected"] == 10
+
+    def test_get_runs_order_and_limit(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            for _ in range(3):
+                rid = storage.record_run_start()
+                storage.record_run_end(rid, devices=1, logs=1)
+            runs = storage.get_runs(limit=2)
+            assert len(runs) == 2
+            # Most recent first.
+            assert runs[0]["id"] > runs[1]["id"]
+
+    def test_get_runs_empty(self) -> None:
+        with LogStorage(Path(":memory:")) as storage:
+            assert storage.get_runs() == []

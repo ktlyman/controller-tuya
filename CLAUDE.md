@@ -16,7 +16,9 @@
 - `src/tuya_agent/storage.py` is the SQLite storage layer for persisting device logs with deduplication
 - `src/tuya_agent/collector.py` orchestrates periodic API-based log collection across all devices
 - `src/tuya_agent/watcher.py` streams real-time Pulsar WebSocket events into SQLite storage
-- `src/tuya_agent/__main__.py` is the CLI entry point with `collect`, `watch`, and `status` subcommands
+- `src/tuya_agent/server.py` is the FastAPI web server exposing REST endpoints and SSE for the dashboard
+- `src/tuya_agent/static/index.html` is the self-contained HTML/CSS/JS dashboard served by the web server
+- `src/tuya_agent/__main__.py` is the CLI entry point with `collect`, `watch`, `serve`, and `status` subcommands
 - You SHOULD follow the existing pattern where each test file mirrors a source module (e.g. `tests/test_auth.py` tests `src/tuya_agent/auth.py`)
 
 ## Code Standards

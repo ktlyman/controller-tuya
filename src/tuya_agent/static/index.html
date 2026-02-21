@@ -1,0 +1,1334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tuya IoT Dashboard</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0f1117;
+  --card-bg: #222636;
+  --sidebar-bg: #1a1d27;
+  --accent: #3b82f6;
+  --text: #e4e6eb;
+  --text-secondary: #8b8fa3;
+  --success: #22c55e;
+  --danger: #ef4444;
+  --border: #2d3148;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  --radius: 8px;
+  --transition: 0.2s ease;
+}
+
+html, body { height: 100%; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  overflow: hidden;
+}
+
+/* ── Layout ── */
+.app {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  height: 100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  padding: 24px 20px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-brand h1 {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.sidebar-brand span {
+  font-size: 11px;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.sidebar-nav {
+  list-style: none;
+  padding: 12px 8px;
+  flex: 1;
+}
+
+.sidebar-nav li {
+  margin-bottom: 2px;
+}
+
+.sidebar-nav a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 6px;
+  color: var(--text-secondary);
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all var(--transition);
+  cursor: pointer;
+  position: relative;
+}
+
+.sidebar-nav a:hover {
+  background: rgba(59, 130, 246, 0.08);
+  color: var(--text);
+}
+
+.sidebar-nav a.active {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+}
+
+.sidebar-nav a .nav-icon {
+  width: 20px;
+  text-align: center;
+  font-size: 16px;
+  flex-shrink: 0;
+}
+
+.nav-badge {
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 10px;
+  margin-left: auto;
+  min-width: 20px;
+  text-align: center;
+  display: none;
+}
+
+.nav-badge.visible { display: inline-block; }
+
+/* ── Main ── */
+.main {
+  overflow-y: auto;
+  padding: 32px;
+}
+
+.page-section {
+  display: none;
+  animation: fadeIn 0.25s ease;
+}
+
+.page-section.active { display: block; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.page-header {
+  margin-bottom: 24px;
+}
+
+.page-header h2 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.3px;
+}
+
+.page-header p {
+  color: var(--text-secondary);
+  font-size: 14px;
+  margin-top: 4px;
+}
+
+/* ── Cards Grid ── */
+.card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.card:hover {
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Device Card ── */
+.device-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.online { background: var(--success); box-shadow: 0 0 6px rgba(34, 197, 94, 0.5); }
+.status-dot.offline { background: var(--danger); box-shadow: 0 0 6px rgba(239, 68, 68, 0.3); }
+
+.device-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.badge-category {
+  background: rgba(59, 130, 246, 0.15);
+  color: var(--accent);
+}
+
+.badge-success {
+  background: rgba(34, 197, 94, 0.15);
+  color: var(--success);
+}
+
+.badge-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.badge-warning {
+  background: rgba(234, 179, 8, 0.15);
+  color: #eab308;
+}
+
+.device-id {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Buttons ── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover { background: #2563eb; }
+.btn-primary:active { transform: scale(0.97); }
+
+.btn-secondary {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+.btn-secondary:hover { background: rgba(255, 255, 255, 0.1); }
+
+.btn-sm {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+.btn-danger {
+  background: rgba(239, 68, 68, 0.15);
+  color: var(--danger);
+}
+
+.btn-danger:hover { background: rgba(239, 68, 68, 0.25); }
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Toggle Switch ── */
+.toggle-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.toggle-wrap:last-child { border-bottom: none; }
+
+.toggle-label {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background var(--transition);
+}
+
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 2px;
+  width: 20px;
+  height: 20px;
+  background: #fff;
+  border-radius: 50%;
+  transition: transform var(--transition);
+}
+
+.toggle input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle input:checked + .toggle-slider::before {
+  transform: translateX(20px);
+}
+
+/* ── DP Value Row ── */
+.dp-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.dp-row:last-child { border-bottom: none; }
+
+.dp-code {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+  min-width: 100px;
+}
+
+.dp-value {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Forms ── */
+.form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-input, .form-select {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  transition: border-color var(--transition);
+  outline: none;
+}
+
+.form-input:focus, .form-select:focus {
+  border-color: var(--accent);
+}
+
+.form-input::placeholder { color: var(--text-secondary); }
+
+.form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238b8fa3' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+}
+
+.inline-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 4px 8px;
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 12px;
+  width: 100px;
+  outline: none;
+}
+
+.inline-input:focus { border-color: var(--accent); }
+
+/* ── Tables ── */
+.table-wrap {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--card-bg);
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th {
+  text-align: left;
+  padding: 12px 16px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  background: rgba(255, 255, 255, 0.02);
+  border-bottom: 1px solid var(--border);
+}
+
+td {
+  padding: 10px 16px;
+  font-size: 13px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+tr:last-child td { border-bottom: none; }
+
+tr:hover td { background: rgba(255, 255, 255, 0.02); }
+
+td.mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* ── Stat Cards ── */
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+.stat-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-number {
+  font-size: 36px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-top: 6px;
+}
+
+/* ── Events Feed ── */
+.event-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.event-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.event-status-dot.connecting { background: #eab308; animation: pulse 1.5s infinite; }
+.event-status-dot.connected { background: var(--success); }
+.event-status-dot.disconnected { background: var(--danger); }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.event-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: calc(100vh - 240px);
+  overflow-y: auto;
+}
+
+.event-item {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  animation: fadeIn 0.2s ease;
+}
+
+.event-item-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.event-time {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--mono);
+}
+
+.event-type {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+}
+
+.event-device {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-left: auto;
+}
+
+.event-data {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 8px 10px;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+/* ── Scenes ── */
+.scene-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.scene-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.scene-id {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* ── Device DPs Area ── */
+.device-dps {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+
+/* ── Toast ── */
+.toast-container {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.toast {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 10px 16px;
+  font-size: 13px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  animation: slideIn 0.25s ease;
+  max-width: 360px;
+}
+
+.toast.success { border-left: 3px solid var(--success); }
+.toast.error { border-left: 3px solid var(--danger); }
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* ── Misc ── */
+.empty-state {
+  text-align: center;
+  padding: 48px 20px;
+  color: var(--text-secondary);
+  font-size: 14px;
+}
+
+.loading {
+  text-align: center;
+  padding: 32px;
+  color: var(--text-secondary);
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text);
+  margin-bottom: 12px;
+}
+
+.result-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.home-input-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-brand">
+      <h1>Tuya IoT</h1>
+      <span>Dashboard</span>
+    </div>
+    <ul class="sidebar-nav">
+      <li><a data-page="devices" onclick="navigate('devices')">
+        <span class="nav-icon">&#9671;</span> Devices
+      </a></li>
+      <li><a data-page="scenes" onclick="navigate('scenes')">
+        <span class="nav-icon">&#9881;</span> Scenes
+      </a></li>
+      <li><a data-page="logs" onclick="navigate('logs')">
+        <span class="nav-icon">&#9776;</span> Logs
+      </a></li>
+      <li><a data-page="events" onclick="navigate('events')">
+        <span class="nav-icon">&#9889;</span> Events
+        <span id="event-badge" class="nav-badge">0</span>
+      </a></li>
+      <li><a data-page="status" onclick="navigate('status')">
+        <span class="nav-icon">&#9635;</span> Status
+      </a></li>
+    </ul>
+  </aside>
+
+  <!-- Main Content -->
+  <main class="main">
+
+    <!-- DEVICES PAGE -->
+    <section id="page-devices" class="page-section">
+      <div class="page-header">
+        <h2>Devices</h2>
+        <p>Manage and control your connected devices</p>
+      </div>
+      <div id="devices-grid" class="card-grid"></div>
+    </section>
+
+    <!-- SCENES PAGE -->
+    <section id="page-scenes" class="page-section">
+      <div class="page-header">
+        <h2>Scenes</h2>
+        <p>View and trigger automation scenes</p>
+      </div>
+      <div id="scenes-home-input" class="home-input-row" style="display:none;">
+        <label style="font-size:13px;color:var(--text-secondary);">Home ID:</label>
+        <input id="home-id-input" class="form-input" placeholder="Enter home/owner ID" style="width:260px;">
+        <button class="btn btn-primary btn-sm" onclick="pages.scenes.setHomeId()">Set</button>
+      </div>
+      <div id="scenes-grid" class="card-grid"></div>
+    </section>
+
+    <!-- LOGS PAGE -->
+    <section id="page-logs" class="page-section">
+      <div class="page-header">
+        <h2>Logs</h2>
+        <p>Search device event logs</p>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Device</label>
+          <select id="log-device" class="form-select" style="min-width:200px;">
+            <option value="">All Devices</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Start</label>
+          <input id="log-start" type="datetime-local" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>End</label>
+          <input id="log-end" type="datetime-local" class="form-input">
+        </div>
+        <div class="form-group">
+          <label>Code</label>
+          <input id="log-code" class="form-input" placeholder="e.g. switch_1" style="width:140px;">
+        </div>
+        <div class="form-group">
+          <label>&nbsp;</label>
+          <button class="btn btn-primary" onclick="pages.logs.search()">Search</button>
+        </div>
+      </div>
+      <div id="logs-count" class="result-count"></div>
+      <div id="logs-table-wrap"></div>
+    </section>
+
+    <!-- EVENTS PAGE -->
+    <section id="page-events" class="page-section">
+      <div class="page-header">
+        <h2>Events</h2>
+        <p>Real-time event stream from devices</p>
+      </div>
+      <div class="event-status">
+        <span id="event-status-dot" class="event-status-dot disconnected"></span>
+        <span id="event-status-text">Disconnected</span>
+      </div>
+      <div id="event-feed" class="event-feed"></div>
+    </section>
+
+    <!-- STATUS PAGE -->
+    <section id="page-status" class="page-section">
+      <div class="page-header">
+        <h2>Status</h2>
+        <p>System overview and collection statistics</p>
+      </div>
+      <div id="status-stats" class="stat-grid"></div>
+      <h3 class="section-title">Device Bookmarks</h3>
+      <div id="status-bookmarks" class="table-wrap" style="margin-bottom:28px;"></div>
+      <h3 class="section-title">Recent Collection Runs</h3>
+      <div id="status-runs" class="table-wrap"></div>
+    </section>
+
+  </main>
+</div>
+
+<div id="toast-container" class="toast-container"></div>
+
+<script>
+/* ─────────────────────────── State ─────────────────────────── */
+const state = {
+  currentPage: null,
+  devices: [],
+  scenes: [],
+  events: [],
+  eventSource: null,
+  homeId: null,
+  unseenEvents: 0,
+};
+
+/* ─────────────────────────── Helpers ─────────────────────────── */
+function esc(str) {
+  if (str == null) return '';
+  const d = document.createElement('div');
+  d.textContent = String(str);
+  return d.innerHTML;
+}
+
+function formatTime(ms) {
+  if (!ms) return '---';
+  const d = new Date(typeof ms === 'number' ? ms : ms);
+  return d.toLocaleString();
+}
+
+function formatISOLocal(date) {
+  const pad = (n) => String(n).padStart(2, '0');
+  return date.getFullYear() + '-' + pad(date.getMonth() + 1) + '-' + pad(date.getDate()) +
+    'T' + pad(date.getHours()) + ':' + pad(date.getMinutes());
+}
+
+function toast(message, type) {
+  const c = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = 'toast ' + (type || 'success');
+  el.textContent = message;
+  c.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 3000);
+}
+
+function eventTypeColor(type) {
+  const colors = {
+    online: 'var(--success)',
+    offline: 'var(--danger)',
+    status_report: 'var(--accent)',
+    data_report: '#a78bfa',
+  };
+  return colors[type] || '#eab308';
+}
+
+/* ─────────────────────────── API ─────────────────────────── */
+const api = {
+  async get(path) {
+    const res = await fetch(path);
+    if (!res.ok) throw new Error(`GET ${path}: ${res.status}`);
+    return res.json();
+  },
+  async post(path, body) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) throw new Error(`POST ${path}: ${res.status}`);
+    return res.json();
+  },
+};
+
+/* ─────────────────────────── Pages ─────────────────────────── */
+const pages = {
+
+  /* ── Devices ── */
+  devices: {
+    async load() {
+      try {
+        const data = await api.get('/api/devices');
+        state.devices = data.list || data || [];
+        this.render();
+      } catch (e) {
+        toast('Failed to load devices: ' + e.message, 'error');
+      }
+    },
+
+    render() {
+      const grid = document.getElementById('devices-grid');
+      if (!state.devices.length) {
+        grid.innerHTML = '<div class="empty-state">No devices found</div>';
+        return;
+      }
+      grid.innerHTML = state.devices.map((d) => {
+        const name = esc(d.custom_name || d.name || d.id);
+        const online = d.online === true || d.online === 'true';
+        return `
+          <div class="card" id="device-card-${esc(d.id)}">
+            <div class="device-header">
+              <span class="status-dot ${online ? 'online' : 'offline'}"></span>
+              <span class="device-name" title="${name}">${name}</span>
+              ${d.category ? `<span class="badge badge-category">${esc(d.category)}</span>` : ''}
+            </div>
+            <div class="device-id" title="${esc(d.id)}">${esc(d.id)}</div>
+            <button class="btn btn-secondary btn-sm" onclick="pages.devices.loadStatus('${esc(d.id)}')">Load Status</button>
+            <div class="device-dps" id="dps-${esc(d.id)}" style="display:none;"></div>
+          </div>`;
+      }).join('');
+    },
+
+    async loadStatus(deviceId) {
+      const dpsEl = document.getElementById('dps-' + deviceId);
+      if (!dpsEl) return;
+      dpsEl.style.display = 'block';
+      dpsEl.innerHTML = '<div class="loading">Loading...</div>';
+
+      try {
+        const [statusData, funcData] = await Promise.all([
+          api.get(`/api/devices/${deviceId}/status`),
+          api.get(`/api/devices/${deviceId}/functions`).catch(() => ({ functions: [] })),
+        ]);
+
+        const statusList = Array.isArray(statusData) ? statusData : (statusData.result || statusData.status || []);
+        const funcList = (funcData.functions || funcData.result?.functions || []);
+        const funcCodes = new Set(funcList.map((f) => f.code));
+        const funcMap = {};
+        funcList.forEach((f) => { funcMap[f.code] = f; });
+
+        let html = '';
+        statusList.forEach((dp) => {
+          const fn = funcMap[dp.code];
+          const isBool = (fn && fn.type === 'Boolean') ||
+            (typeof dp.value === 'boolean') ||
+            (fn && fn.values && /"type":\s*"bool"/.test(fn.values));
+
+          if (isBool && funcCodes.has(dp.code)) {
+            const checked = dp.value === true || dp.value === 'true' ? 'checked' : '';
+            html += `
+              <div class="toggle-wrap">
+                <span class="toggle-label">${esc(dp.code)}</span>
+                <label class="toggle">
+                  <input type="checkbox" ${checked}
+                    onchange="pages.devices.sendCommand('${esc(deviceId)}', '${esc(dp.code)}', this.checked)">
+                  <span class="toggle-slider"></span>
+                </label>
+              </div>`;
+          } else if (funcCodes.has(dp.code)) {
+            html += `
+              <div class="dp-row">
+                <span class="dp-code">${esc(dp.code)}</span>
+                <span class="dp-value">${esc(JSON.stringify(dp.value))}</span>
+                <input class="inline-input" id="input-${esc(deviceId)}-${esc(dp.code)}"
+                  value="${esc(typeof dp.value === 'object' ? JSON.stringify(dp.value) : dp.value)}"
+                  placeholder="value">
+                <button class="btn btn-primary btn-sm"
+                  onclick="pages.devices.sendFromInput('${esc(deviceId)}', '${esc(dp.code)}')">Send</button>
+              </div>`;
+          } else {
+            html += `
+              <div class="dp-row">
+                <span class="dp-code">${esc(dp.code)}</span>
+                <span class="dp-value">${esc(JSON.stringify(dp.value))}</span>
+              </div>`;
+          }
+        });
+
+        dpsEl.innerHTML = html || '<div class="empty-state" style="padding:12px;">No data points</div>';
+      } catch (e) {
+        dpsEl.innerHTML = `<div class="empty-state" style="color:var(--danger);">Error: ${esc(e.message)}</div>`;
+      }
+    },
+
+    async sendCommand(deviceId, code, value) {
+      try {
+        let parsed = value;
+        if (typeof value === 'string') {
+          try { parsed = JSON.parse(value); } catch { parsed = value; }
+        }
+        await api.post(`/api/devices/${deviceId}/commands`, {
+          commands: [{ code, value: parsed }],
+        });
+        toast(`Sent ${code} = ${JSON.stringify(parsed)}`, 'success');
+      } catch (e) {
+        toast('Command failed: ' + e.message, 'error');
+      }
+    },
+
+    sendFromInput(deviceId, code) {
+      const input = document.getElementById(`input-${deviceId}-${code}`);
+      if (!input) return;
+      this.sendCommand(deviceId, code, input.value);
+    },
+  },
+
+  /* ── Scenes ── */
+  scenes: {
+    async load() {
+      if (!state.homeId && state.devices.length) {
+        state.homeId = state.devices[0].owner_id || null;
+      }
+      if (!state.homeId) {
+        document.getElementById('scenes-home-input').style.display = 'flex';
+        document.getElementById('scenes-grid').innerHTML =
+          '<div class="empty-state">Enter a Home ID to load scenes</div>';
+        return;
+      }
+      document.getElementById('scenes-home-input').style.display = 'none';
+      try {
+        const data = await api.get(`/api/homes/${state.homeId}/scenes`);
+        state.scenes = Array.isArray(data) ? data : (data.list || []);
+        this.render();
+      } catch (e) {
+        toast('Failed to load scenes: ' + e.message, 'error');
+      }
+    },
+
+    render() {
+      const grid = document.getElementById('scenes-grid');
+      if (!state.scenes.length) {
+        grid.innerHTML = '<div class="empty-state">No scenes found</div>';
+        return;
+      }
+      grid.innerHTML = state.scenes.map((s) => `
+        <div class="card scene-card">
+          <div>
+            <div class="scene-name">${esc(s.name)}</div>
+            <div class="scene-id">${esc(s.scene_id)}</div>
+          </div>
+          <button class="btn btn-primary btn-sm"
+            onclick="pages.scenes.trigger('${esc(s.scene_id)}', this)">Trigger</button>
+        </div>`).join('');
+    },
+
+    async trigger(sceneId, btn) {
+      if (btn) btn.disabled = true;
+      try {
+        await api.post(`/api/homes/${state.homeId}/scenes/${sceneId}/trigger`);
+        toast('Scene triggered', 'success');
+      } catch (e) {
+        toast('Trigger failed: ' + e.message, 'error');
+      } finally {
+        if (btn) setTimeout(() => { btn.disabled = false; }, 1000);
+      }
+    },
+
+    setHomeId() {
+      const val = document.getElementById('home-id-input').value.trim();
+      if (!val) return;
+      state.homeId = val;
+      this.load();
+    },
+  },
+
+  /* ── Logs ── */
+  logs: {
+    load() {
+      const sel = document.getElementById('log-device');
+      const existing = sel.value;
+      sel.innerHTML = '<option value="">All Devices</option>' +
+        state.devices.map((d) => {
+          const label = d.custom_name || d.name || d.id;
+          return `<option value="${esc(d.id)}">${esc(label)}</option>`;
+        }).join('');
+      sel.value = existing;
+
+      const now = new Date();
+      const yesterday = new Date(now.getTime() - 86400000);
+      if (!document.getElementById('log-start').value) {
+        document.getElementById('log-start').value = formatISOLocal(yesterday);
+      }
+      if (!document.getElementById('log-end').value) {
+        document.getElementById('log-end').value = formatISOLocal(now);
+      }
+    },
+
+    async search() {
+      const deviceId = document.getElementById('log-device').value;
+      const start = document.getElementById('log-start').value;
+      const end = document.getElementById('log-end').value;
+      const code = document.getElementById('log-code').value.trim();
+
+      const params = new URLSearchParams();
+      if (deviceId) params.set('device_id', deviceId);
+      if (start) params.set('start_time', new Date(start).getTime().toString());
+      if (end) params.set('end_time', new Date(end).getTime().toString());
+      if (code) params.set('code', code);
+      params.set('limit', '100');
+      params.set('offset', '0');
+
+      try {
+        const data = await api.get('/api/logs?' + params.toString());
+        const logs = data.logs || [];
+        const total = data.total != null ? data.total : logs.length;
+
+        document.getElementById('logs-count').textContent = `${total} log(s) found`;
+
+        if (!logs.length) {
+          document.getElementById('logs-table-wrap').innerHTML =
+            '<div class="empty-state">No logs match the query</div>';
+          return;
+        }
+
+        const deviceMap = {};
+        state.devices.forEach((d) => { deviceMap[d.id] = d.custom_name || d.name || d.id; });
+
+        let html = `<div class="table-wrap"><table>
+          <thead><tr><th>Time</th><th>Device</th><th>Code</th><th>Value</th><th>Source</th></tr></thead>
+          <tbody>`;
+        logs.forEach((l) => {
+          const ts = formatTime(l.event_time || l.timestamp);
+          const devLabel = esc(deviceMap[l.device_id] || l.device_id || '');
+          html += `<tr>
+            <td>${esc(ts)}</td>
+            <td class="mono" title="${esc(l.device_id)}">${devLabel}</td>
+            <td class="mono">${esc(l.code)}</td>
+            <td class="mono">${esc(typeof l.value === 'object' ? JSON.stringify(l.value) : l.value)}</td>
+            <td>${esc(l.source || '')}</td>
+          </tr>`;
+        });
+        html += '</tbody></table></div>';
+        document.getElementById('logs-table-wrap').innerHTML = html;
+      } catch (e) {
+        toast('Log search failed: ' + e.message, 'error');
+      }
+    },
+  },
+
+  /* ── Events ── */
+  events: {
+    load() {
+      state.unseenEvents = 0;
+      this.updateBadge();
+      this.renderFeed();
+      this.connect();
+    },
+
+    connect() {
+      if (state.eventSource) return;
+      this.setStatus('connecting');
+      const es = new EventSource('/api/events/stream');
+      state.eventSource = es;
+
+      es.onopen = () => { this.setStatus('connected'); };
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          state.events.unshift(data);
+          if (state.events.length > 500) state.events.length = 500;
+
+          if (state.currentPage === 'events') {
+            this.prependEvent(data);
+          } else {
+            state.unseenEvents++;
+            this.updateBadge();
+          }
+        } catch { /* ignore malformed */ }
+      };
+      es.onerror = () => {
+        this.setStatus('disconnected');
+        state.eventSource.close();
+        state.eventSource = null;
+        setTimeout(() => this.connect(), 5000);
+      };
+    },
+
+    setStatus(s) {
+      const dot = document.getElementById('event-status-dot');
+      const txt = document.getElementById('event-status-text');
+      dot.className = 'event-status-dot ' + s;
+      txt.textContent = s.charAt(0).toUpperCase() + s.slice(1);
+    },
+
+    updateBadge() {
+      const badge = document.getElementById('event-badge');
+      if (state.unseenEvents > 0) {
+        badge.textContent = state.unseenEvents > 99 ? '99+' : state.unseenEvents;
+        badge.classList.add('visible');
+      } else {
+        badge.classList.remove('visible');
+      }
+    },
+
+    renderFeed() {
+      const feed = document.getElementById('event-feed');
+      if (!state.events.length) {
+        feed.innerHTML = '<div class="empty-state">No events yet. Waiting for data...</div>';
+        return;
+      }
+      feed.innerHTML = state.events.map((ev) => this.eventHTML(ev)).join('');
+    },
+
+    prependEvent(ev) {
+      const feed = document.getElementById('event-feed');
+      if (feed.querySelector('.empty-state')) feed.innerHTML = '';
+      feed.insertAdjacentHTML('afterbegin', this.eventHTML(ev));
+      while (feed.children.length > 500) feed.lastChild.remove();
+    },
+
+    eventHTML(ev) {
+      const ts = formatTime(ev.timestamp);
+      const color = eventTypeColor(ev.event_type);
+      const dataStr = typeof ev.data === 'object' ? JSON.stringify(ev.data, null, 2) : esc(ev.data || '');
+      return `
+        <div class="event-item">
+          <div class="event-item-header">
+            <span class="event-time">${esc(ts)}</span>
+            <span class="event-type" style="background:${color}22;color:${color};">
+              ${esc(ev.event_type || 'unknown')}</span>
+            <span class="event-device">${esc(ev.device_id || '')}</span>
+          </div>
+          ${dataStr ? `<div class="event-data">${esc(dataStr)}</div>` : ''}
+        </div>`;
+    },
+  },
+
+  /* ── Status ── */
+  status: {
+    async load() {
+      try {
+        const [stats, bookmarks, runs] = await Promise.all([
+          api.get('/api/logs/stats'),
+          api.get('/api/logs/bookmarks').catch(() => []),
+          api.get('/api/logs/runs').catch(() => []),
+        ]);
+
+        const runList = Array.isArray(runs) ? runs : (runs.runs || []);
+        const bookmarkList = Array.isArray(bookmarks) ? bookmarks : [];
+
+        document.getElementById('status-stats').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-number">${esc(stats.total_logs != null ? stats.total_logs : '---')}</div>
+            <div class="stat-label">Total Logs</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">${esc(stats.total_devices != null ? stats.total_devices : '---')}</div>
+            <div class="stat-label">Devices Tracked</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-number">${esc(stats.total_runs != null ? stats.total_runs : '---')}</div>
+            <div class="stat-label">Collection Runs</div>
+          </div>`;
+
+        if (bookmarkList.length) {
+          let bhtml = '<table><thead><tr><th>Device ID</th><th>Last Event Time</th></tr></thead><tbody>';
+          bookmarkList.forEach((b) => {
+            bhtml += `<tr>
+              <td class="mono">${esc(b.device_id)}</td>
+              <td>${esc(formatTime(b.last_event_time))}</td>
+            </tr>`;
+          });
+          bhtml += '</tbody></table>';
+          document.getElementById('status-bookmarks').innerHTML = bhtml;
+        } else {
+          document.getElementById('status-bookmarks').innerHTML =
+            '<div class="empty-state">No bookmarks</div>';
+        }
+
+        if (runList.length) {
+          let rhtml = '<table><thead><tr><th>ID</th><th>Started</th><th>Duration</th>' +
+            '<th>Devices</th><th>Logs</th><th>Status</th></tr></thead><tbody>';
+          runList.forEach((r) => {
+            const started = formatTime(r.started_at);
+            let duration = '---';
+            if (r.started_at && r.finished_at) {
+              const ms = new Date(r.finished_at).getTime() - new Date(r.started_at).getTime();
+              duration = ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's';
+            }
+            const statusClass = r.status === 'completed' ? 'badge-success' :
+              r.status === 'failed' ? 'badge-danger' : 'badge-warning';
+            rhtml += `<tr>
+              <td class="mono">${esc(r.id)}</td>
+              <td>${esc(started)}</td>
+              <td>${esc(duration)}</td>
+              <td>${esc(r.devices_count != null ? r.devices_count : '---')}</td>
+              <td>${esc(r.logs_collected != null ? r.logs_collected : '---')}</td>
+              <td><span class="badge ${statusClass}">${esc(r.status || 'unknown')}</span></td>
+            </tr>`;
+          });
+          rhtml += '</tbody></table>';
+          document.getElementById('status-runs').innerHTML = rhtml;
+        } else {
+          document.getElementById('status-runs').innerHTML =
+            '<div class="empty-state">No collection runs recorded</div>';
+        }
+      } catch (e) {
+        toast('Failed to load status: ' + e.message, 'error');
+      }
+    },
+  },
+};
+
+/* ─────────────────────────── Navigation ─────────────────────────── */
+function navigate(page) {
+  state.currentPage = page;
+
+  document.querySelectorAll('.page-section').forEach((el) => {
+    el.classList.remove('active');
+  });
+  const target = document.getElementById('page-' + page);
+  if (target) target.classList.add('active');
+
+  document.querySelectorAll('.sidebar-nav a').forEach((a) => {
+    a.classList.toggle('active', a.getAttribute('data-page') === page);
+  });
+
+  if (pages[page] && typeof pages[page].load === 'function') {
+    pages[page].load();
+  }
+}
+
+/* ─────────────────────────── Init ─────────────────────────── */
+document.addEventListener('DOMContentLoaded', async () => {
+  try {
+    const data = await api.get('/api/devices');
+    state.devices = data.list || data || [];
+  } catch {
+    /* devices will load when navigating */
+  }
+  navigate('devices');
+  pages.events.connect();
+});
+</script>
+</body>
+</html>

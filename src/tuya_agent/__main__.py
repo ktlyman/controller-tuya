@@ -4,6 +4,7 @@ Usage::
 
     python -m tuya_agent collect [--daemon] [--interval 21600] [--db tuya_logs.db]
     python -m tuya_agent watch   [--db tuya_logs.db] [--duration SECONDS]
+    python -m tuya_agent serve   [--host 127.0.0.1] [--port 8000] [--db tuya_logs.db]
     python -m tuya_agent status  [--db tuya_logs.db]
 """
 
@@ -69,6 +70,23 @@ def main() -> None:
         help="Stop after N seconds (default: run forever)",
     )
 
+    # -- serve ---------------------------------------------------------------
+    serve_p = sub.add_parser(
+        "serve", help="Start the web dashboard server",
+    )
+    serve_p.add_argument(
+        "--host", type=str, default="127.0.0.1",
+        help="Bind address (default: 127.0.0.1)",
+    )
+    serve_p.add_argument(
+        "--port", type=int, default=8000,
+        help="Port (default: 8000)",
+    )
+    serve_p.add_argument(
+        "--db", type=Path, default=Path("tuya_logs.db"),
+        help="SQLite database path (default: tuya_logs.db)",
+    )
+
     # -- status --------------------------------------------------------------
     status_p = sub.add_parser("status", help="Show collection status")
     status_p.add_argument(
@@ -90,6 +108,8 @@ def main() -> None:
         asyncio.run(_run_collect(args))
     elif args.command == "watch":
         asyncio.run(_run_watch(args))
+    elif args.command == "serve":
+        _run_serve(args)
     elif args.command == "status":
         _run_status(args)
 
@@ -143,6 +163,15 @@ async def _run_watch(args: argparse.Namespace) -> None:
                     sys.exit(1)
                 raise
             print(f"\nDone — {count} events stored to {args.db}")
+
+
+def _run_serve(args: argparse.Namespace) -> None:
+    import uvicorn
+
+    from tuya_agent.server import create_app
+
+    app = create_app(db_path=args.db)
+    uvicorn.run(app, host=args.host, port=args.port)
 
 
 def _run_status(args: argparse.Namespace) -> None:
