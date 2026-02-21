@@ -324,22 +324,17 @@ def create_app(
     # Scene endpoints
     # ===================================================================
 
-    @app.get("/api/homes/{home_id}/scenes")
-    async def list_scenes(home_id: str) -> list[dict[str, Any]]:
+    @app.get("/api/spaces/{space_id}/scenes")
+    async def list_scenes(space_id: str) -> Any:
         try:
-            return await _client().scenes.list_scenes(home_id)
+            return await _client().scenes.list_rules(space_id)
         except TuyaAPIError as exc:
             _handle_tuya_error(exc)
 
-    @app.post("/api/homes/{home_id}/scenes/{scene_id}/trigger")
-    async def trigger_scene(
-        home_id: str,
-        scene_id: str,
-    ) -> dict[str, bool]:
+    @app.post("/api/scenes/{rule_id}/trigger")
+    async def trigger_scene(rule_id: str) -> dict[str, bool]:
         try:
-            result = await _client().scenes.trigger_scene(
-                home_id, scene_id,
-            )
+            result = await _client().scenes.trigger_rule(rule_id)
             return {"success": result}
         except TuyaAPIError as exc:
             _handle_tuya_error(exc)

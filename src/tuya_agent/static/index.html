@@ -1047,8 +1047,8 @@ td.mono {
         </div>
       </div>
       <div id="scenes-home-input" class="home-input-row" style="display:none;">
-        <label style="font-size:13px;color:var(--text-secondary);">Home ID:</label>
-        <input id="home-id-input" class="form-input" placeholder="Enter home/owner ID"
+        <label style="font-size:13px;color:var(--text-secondary);">Space ID:</label>
+        <input id="home-id-input" class="form-input" placeholder="Enter space ID"
           style="width:260px;">
         <button class="btn btn-primary btn-sm" onclick="pages.scenes.setHomeId()">Set</button>
       </div>
@@ -1822,20 +1822,35 @@ const pages = {
   /* ── Scenes ── */
   scenes: {
     async load() {
-      if (!state.homeId && state.devices.length) {
-        state.homeId = state.devices[0].bindSpaceId ||
-          state.devices[0].owner_id || null;
-      }
-      if (!state.homeId) {
+      // Gather unique space IDs from loaded devices.
+      const spaceIds = new Set();
+      state.devices.forEach((d) => {
+        const sid = d.bindSpaceId || d.bind_space_id;
+        if (sid) spaceIds.add(String(sid));
+      });
+
+      if (!spaceIds.size) {
         document.getElementById('scenes-home-input').style.display = 'flex';
         document.getElementById('scenes-grid').innerHTML =
-          '<div class="empty-state">Enter a Home ID to load scenes</div>';
+          '<div class="empty-state">No spaces found. Enter a Space ID manually.</div>';
         return;
       }
       document.getElementById('scenes-home-input').style.display = 'none';
+
       try {
-        const data = await api.get(`/api/homes/${state.homeId}/scenes`);
-        state.scenes = Array.isArray(data) ? data : (data.list || []);
+        // Fetch scenes from all spaces in parallel.
+        const results = await Promise.all([...spaceIds].map(async (sid) => {
+          try {
+            const data = await api.get(
+              `/api/spaces/${encodeURIComponent(sid)}/scenes`
+            );
+            const list = data.list || (Array.isArray(data) ? data : []);
+            return list;
+          } catch {
+            return [];
+          }
+        }));
+        state.scenes = results.flat();
         this.render();
       } catch (e) {
         toast('Failed to load scenes: ' + e.message, 'error');
@@ -1848,21 +1863,32 @@ const pages = {
         grid.innerHTML = '<div class="empty-state">No scenes found</div>';
         return;
       }
-      grid.innerHTML = state.scenes.map((s) => `
+      grid.innerHTML = state.scenes.map((s) => {
+        const name = s.name || 'Unnamed';
+        const id = s.id || s.scene_id || '';
+        const sType = s.type === 'scene' ? 'Tap-to-Run' : 'Automation';
+        const typeClass = s.type === 'scene' ? 'badge-success' : 'badge-category';
+        const disabled = s.status === 'disable' ? 'disabled' : '';
+        return `
         <div class="card scene-card">
           <div>
-            <div class="scene-name">${esc(s.name)}</div>
-            <div class="scene-id">${esc(s.scene_id)}</div>
+            <div class="scene-name">${esc(name)}</div>
+            <div class="scene-id">
+              <span class="badge ${typeClass}">${esc(sType)}</span>
+              ${s.status === 'disable'
+                ? '<span class="badge badge-danger">disabled</span>' : ''}
+            </div>
           </div>
-          <button class="btn btn-primary btn-sm"
-            onclick="pages.scenes.trigger('${esc(s.scene_id)}', this)">Trigger</button>
-        </div>`).join('');
+          <button class="btn btn-primary btn-sm" ${disabled}
+            onclick="pages.scenes.trigger('${esc(id)}', this)">Trigger</button>
+        </div>`;
+      }).join('');
     },
 
-    async trigger(sceneId, btn) {
+    async trigger(ruleId, btn) {
       if (btn) btn.disabled = true;
       try {
-        await api.post(`/api/homes/${state.homeId}/scenes/${sceneId}/trigger`);
+        await api.post(`/api/scenes/${encodeURIComponent(ruleId)}/trigger`);
         toast('Scene triggered', 'success');
       } catch (e) {
         toast('Trigger failed: ' + e.message, 'error');
@@ -1874,13 +1900,21 @@ const pages = {
     setHomeId() {
       const val = document.getElementById('home-id-input').value.trim();
       if (!val) return;
-      state.homeId = val;
-      this.load();
+      // Manual entry: treat as space ID and fetch.
+      api.get(`/api/spaces/${encodeURIComponent(val)}/scenes`)
+        .then((data) => {
+          state.scenes = data.list || (Array.isArray(data) ? data : []);
+          this.render();
+          document.getElementById('scenes-home-input').style.display = 'none';
+        })
+        .catch((e) => toast('Failed: ' + e.message, 'error'));
     },
   },
 
   /* ── Logs ── */
   logs: {
+    _loaded: false,
+
     load() {
       const sel = document.getElementById('log-device');
       const existing = sel.value;
@@ -1898,6 +1932,12 @@ const pages = {
       }
       if (!document.getElementById('log-end').value) {
         document.getElementById('log-end').value = formatISOLocal(now);
+      }
+
+      // Auto-search on first visit to show latest logs immediately.
+      if (!this._loaded) {
+        this._loaded = true;
+        this.search();
       }
     },
 

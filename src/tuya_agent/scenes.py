@@ -14,14 +14,47 @@ class ScenesMixin:
     def __init__(self, client: TuyaClient) -> None:
         self._client = client
 
-    # -- Tap-to-run scenes ---------------------------------------------------
+    # -- Linkage rules (v2.0 Cloud API) --------------------------------------
+
+    async def list_rules(
+        self,
+        space_id: str,
+        *,
+        rule_type: str = "",
+        page_no: int = 1,
+        page_size: int = 50,
+    ) -> dict[str, Any]:
+        """List linkage rules (scenes + automations) in a space.
+
+        ``rule_type``: ``"tap_to_run"`` for tap-to-run scenes,
+        ``"automation"`` for automations, or ``""`` for both.
+        """
+        params: dict[str, Any] = {
+            "space_id": space_id,
+            "page_no": page_no,
+            "page_size": page_size,
+        }
+        if rule_type:
+            params["type"] = rule_type
+        return await self._client.request(
+            "GET", "/v2.0/cloud/scene/rule", params=params,
+        )
+
+    async def trigger_rule(self, rule_id: str) -> bool:
+        """Trigger (execute) a tap-to-run scene / linkage rule."""
+        await self._client.request(
+            "POST", f"/v2.0/cloud/scene/rule/{rule_id}/actions/trigger",
+        )
+        return True
+
+    # -- Legacy v1.x endpoints (kept for compatibility) --------------------
 
     async def list_scenes(self, home_id: str) -> list[dict[str, Any]]:
-        """List all tap-to-run scenes in a home."""
+        """List all tap-to-run scenes in a home (v1.1)."""
         return await self._client.request("GET", f"/v1.1/homes/{home_id}/scenes")
 
     async def trigger_scene(self, home_id: str, scene_id: str) -> bool:
-        """Trigger (execute) a tap-to-run scene."""
+        """Trigger (execute) a tap-to-run scene (v1.0)."""
         await self._client.request(
             "POST", f"/v1.0/homes/{home_id}/scenes/{scene_id}/trigger"
         )

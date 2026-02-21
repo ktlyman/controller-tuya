@@ -49,11 +49,12 @@ def _mock_client() -> MagicMock:
     })
     client.devices.send_commands = AsyncMock(return_value=True)
 
-    # scenes
-    client.scenes.list_scenes = AsyncMock(return_value=[
-        {"scene_id": "sc1", "name": "Good Night"},
-    ])
-    client.scenes.trigger_scene = AsyncMock(return_value=True)
+    # scenes (v2.0 Cloud API)
+    client.scenes.list_rules = AsyncMock(return_value={
+        "list": [{"id": "sc1", "name": "Good Night", "type": "tap_to_run"}],
+        "total": 1,
+    })
+    client.scenes.trigger_rule = AsyncMock(return_value=True)
 
     # generic request (used by spaces endpoint)
     client.request = AsyncMock(return_value={
@@ -186,20 +187,17 @@ class TestDeviceEndpoints:
 class TestSceneEndpoints:
     async def test_list_scenes(self, client) -> None:
         ac, _, _ = client
-        resp = await ac.get("/api/homes/home1/scenes")
+        resp = await ac.get("/api/spaces/space1/scenes")
         assert resp.status_code == 200
         data = resp.json()
-        assert isinstance(data, list)
-        assert data[0]["name"] == "Good Night"
+        assert data["list"][0]["name"] == "Good Night"
 
     async def test_trigger_scene(self, client) -> None:
         ac, mock_tuya, _ = client
-        resp = await ac.post("/api/homes/home1/scenes/sc1/trigger")
+        resp = await ac.post("/api/scenes/sc1/trigger")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
-        mock_tuya.scenes.trigger_scene.assert_called_once_with(
-            "home1", "sc1",
-        )
+        mock_tuya.scenes.trigger_rule.assert_called_once_with("sc1")
 
 
 class TestSpaceEndpoints:
