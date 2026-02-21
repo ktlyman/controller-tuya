@@ -146,20 +146,54 @@ body {
 
 .page-header {
   margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 
-.page-header h2 {
+.page-header-left h2 {
   font-size: 22px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.3px;
 }
 
-.page-header p {
+.page-header-left p {
   color: var(--text-secondary);
   font-size: 14px;
   margin-top: 4px;
 }
+
+/* ── Edit Mode Toggle Button ── */
+.edit-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition);
+  user-select: none;
+}
+
+.edit-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+.edit-toggle-btn.active {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.edit-toggle-btn .edit-icon { font-size: 14px; }
 
 /* ── Location Groups — side-by-side layout ── */
 .locations-container {
@@ -210,7 +244,8 @@ body {
   border-radius: var(--radius);
   padding: 16px;
   transition: border-color var(--transition), box-shadow var(--transition);
-  cursor: grab;
+  cursor: default;
+  position: relative;
 }
 
 .card:hover {
@@ -218,15 +253,24 @@ body {
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
 }
 
-/* ── Drag-and-drop states ── */
-.card.dragging {
+/* ── Drag-and-drop states (only active in edit mode) ── */
+.edit-mode .card {
+  cursor: grab;
+}
+
+.edit-mode .card.dragging {
   opacity: 0.4;
   cursor: grabbing;
 }
 
-.card.drag-over {
+.edit-mode .card.drag-over {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+}
+
+/* Subtle edit-mode border hint */
+.edit-mode .card {
+  border-style: dashed;
 }
 
 /* ── Device Card ── */
@@ -234,7 +278,7 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 4px;
 }
 
 .status-dot {
@@ -257,6 +301,64 @@ body {
   white-space: nowrap;
 }
 
+/* ── Device Type Icon (top-right corner) ── */
+.device-type-icon {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 18px;
+  opacity: 0.55;
+  line-height: 1;
+  pointer-events: none;
+}
+
+/* ── Expand/Collapse Toggle ── */
+.card-expand-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 4px 0;
+  margin-top: 2px;
+  transition: color var(--transition);
+}
+
+.card-expand-btn:hover { color: var(--accent); }
+
+.card-expand-btn .expand-arrow {
+  display: inline-block;
+  font-size: 10px;
+  transition: transform var(--transition);
+}
+
+.card-expand-btn.expanded .expand-arrow {
+  transform: rotate(90deg);
+}
+
+/* ── Card Details (collapsed by default) ── */
+.card-details {
+  display: none;
+  margin-top: 8px;
+}
+
+.card-details.visible {
+  display: block;
+  animation: fadeIn 0.2s ease;
+}
+
+/* ── Tags row (inside expanded details) ── */
+.device-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
 .badge {
   font-size: 11px;
   font-weight: 600;
@@ -269,6 +371,14 @@ body {
 .badge-category {
   background: rgba(59, 130, 246, 0.15);
   color: var(--accent);
+}
+
+.badge-id {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--text-secondary);
+  font-family: var(--mono);
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .badge-success {
@@ -671,7 +781,6 @@ td.mono {
 
 /* ── Device DPs Area ── */
 .device-dps {
-  margin-top: 10px;
   border-top: 1px solid var(--border);
   padding-top: 8px;
 }
@@ -776,8 +885,13 @@ td.mono {
     <!-- DEVICES PAGE -->
     <section id="page-devices" class="page-section">
       <div class="page-header">
-        <h2>Devices</h2>
-        <p>Manage and control your connected devices</p>
+        <div class="page-header-left">
+          <h2>Devices</h2>
+          <p>Manage and control your connected devices</p>
+        </div>
+        <button id="edit-mode-btn" class="edit-toggle-btn" onclick="pages.devices.toggleEditMode()">
+          <span class="edit-icon">&#9998;</span> Reorder
+        </button>
       </div>
       <div id="devices-grid"></div>
     </section>
@@ -785,12 +899,15 @@ td.mono {
     <!-- SCENES PAGE -->
     <section id="page-scenes" class="page-section">
       <div class="page-header">
-        <h2>Scenes</h2>
-        <p>View and trigger automation scenes</p>
+        <div class="page-header-left">
+          <h2>Scenes</h2>
+          <p>View and trigger automation scenes</p>
+        </div>
       </div>
       <div id="scenes-home-input" class="home-input-row" style="display:none;">
         <label style="font-size:13px;color:var(--text-secondary);">Home ID:</label>
-        <input id="home-id-input" class="form-input" placeholder="Enter home/owner ID" style="width:260px;">
+        <input id="home-id-input" class="form-input" placeholder="Enter home/owner ID"
+          style="width:260px;">
         <button class="btn btn-primary btn-sm" onclick="pages.scenes.setHomeId()">Set</button>
       </div>
       <div id="scenes-grid" class="card-grid"></div>
@@ -799,8 +916,10 @@ td.mono {
     <!-- LOGS PAGE -->
     <section id="page-logs" class="page-section">
       <div class="page-header">
-        <h2>Logs</h2>
-        <p>Search device event logs</p>
+        <div class="page-header-left">
+          <h2>Logs</h2>
+          <p>Search device event logs</p>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group">
@@ -833,8 +952,10 @@ td.mono {
     <!-- EVENTS PAGE -->
     <section id="page-events" class="page-section">
       <div class="page-header">
-        <h2>Events</h2>
-        <p>Real-time event stream from devices</p>
+        <div class="page-header-left">
+          <h2>Events</h2>
+          <p>Real-time event stream from devices</p>
+        </div>
       </div>
       <div class="event-status">
         <span id="event-status-dot" class="event-status-dot disconnected"></span>
@@ -846,8 +967,10 @@ td.mono {
     <!-- STATUS PAGE -->
     <section id="page-status" class="page-section">
       <div class="page-header">
-        <h2>Status</h2>
-        <p>System overview and collection statistics</p>
+        <div class="page-header-left">
+          <h2>Status</h2>
+          <p>System overview and collection statistics</p>
+        </div>
       </div>
       <div id="status-stats" class="stat-grid"></div>
       <h3 class="section-title">Device Bookmarks</h3>
@@ -872,7 +995,49 @@ const state = {
   eventSource: null,
   homeId: null,
   unseenEvents: 0,
+  editMode: false,
 };
+
+/* ─────────────────────────── Device type icons ─────────────────────────── */
+const CATEGORY_ICONS = {
+  // Lighting
+  dj:  '\u{1F4A1}',  // light bulb — dimmer
+  dd:  '\u{1F4A1}',  // light strip
+  fwd: '\u{1F4A1}',  // ambient light
+  xdd: '\u{1F4A1}',  // ceiling light
+  dc:  '\u{1F4A1}',  // string light
+  // Switches
+  kg:  '\u{1F4A1}',  // wall switch (light switch)
+  pc:  '\u{1F50C}',  // power strip
+  cz:  '\u{1F50C}',  // smart plug
+  // Locks
+  jtmspro: '\u{1F512}',  // smart lock pro
+  ms:  '\u{1F512}',  // lock
+  jtms: '\u{1F512}',  // lock (alt)
+  // Gateways
+  wg2: '\u{1F4F6}',  // bluetooth gateway
+  wg:  '\u{1F4F6}',  // gateway
+  // Remote / controllers
+  tdq: '\u{1F4E1}',  // remote control
+  ykq: '\u{1F4E1}',  // remote
+  // Sensors
+  mcs: '\u{1F6AA}',  // door sensor
+  pir: '\u{1F441}',  // motion sensor
+  wsdcg: '\u{1F321}', // temp/humidity
+  // Climate
+  kt:  '\u{2744}',  // AC
+  // Camera
+  sp:  '\u{1F4F7}',  // camera
+  // Curtains
+  cl:  '\u{1FA9F}',  // curtain
+  // Robot vacuum
+  sd:  '\u{1F9F9}',  // robot vacuum
+};
+
+function categoryIcon(category) {
+  if (!category) return '';
+  return CATEGORY_ICONS[category.toLowerCase()] || '\u{1F4E6}'; // default box
+}
 
 /* ─────────────────────────── Helpers ─────────────────────────── */
 function esc(str) {
@@ -950,6 +1115,48 @@ function applyCardOrder(spaceId, devices) {
   return ordered;
 }
 
+/* ─────────────────────── Card Expand/Collapse ─────────────────────── */
+const EXPANDED_KEY = 'tuya_expanded_cards';
+
+function loadExpanded() {
+  try {
+    const raw = localStorage.getItem(EXPANDED_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch { return {}; }
+}
+
+function saveExpanded(deviceId, isExpanded) {
+  const map = loadExpanded();
+  if (isExpanded) {
+    map[deviceId] = true;
+  } else {
+    delete map[deviceId];
+  }
+  localStorage.setItem(EXPANDED_KEY, JSON.stringify(map));
+}
+
+function toggleCardExpand(deviceId) {
+  const details = document.getElementById('details-' + deviceId);
+  const btn = document.getElementById('expand-btn-' + deviceId);
+  if (!details || !btn) return;
+
+  const isVisible = details.classList.contains('visible');
+  if (isVisible) {
+    details.classList.remove('visible');
+    btn.classList.remove('expanded');
+    saveExpanded(deviceId, false);
+  } else {
+    details.classList.add('visible');
+    btn.classList.add('expanded');
+    saveExpanded(deviceId, true);
+    // Load status if not already loaded.
+    const dps = document.getElementById('dps-' + deviceId);
+    if (dps && dps.dataset.loaded !== 'true') {
+      pages.devices.loadStatus(deviceId);
+    }
+  }
+}
+
 /* ─────────────────────────── API ─────────────────────────── */
 const api = {
   async get(path) {
@@ -979,7 +1186,6 @@ const pages = {
         state.devices = data.list || data || [];
         await this.resolveSpaces();
         this.render();
-        this.autoLoadStatus();
       } catch (e) {
         toast('Failed to load devices: ' + e.message, 'error');
       }
@@ -1005,12 +1211,35 @@ const pages = {
       }));
     },
 
+    toggleEditMode() {
+      state.editMode = !state.editMode;
+      const btn = document.getElementById('edit-mode-btn');
+      const container = document.getElementById('devices-grid');
+      if (state.editMode) {
+        btn.classList.add('active');
+        container.classList.add('edit-mode');
+        // Enable draggable on all cards.
+        container.querySelectorAll('.card[data-device-id]').forEach((c) => {
+          c.setAttribute('draggable', 'true');
+        });
+      } else {
+        btn.classList.remove('active');
+        container.classList.remove('edit-mode');
+        // Disable draggable on all cards.
+        container.querySelectorAll('.card[data-device-id]').forEach((c) => {
+          c.removeAttribute('draggable');
+        });
+      }
+    },
+
     render() {
       const container = document.getElementById('devices-grid');
       if (!state.devices.length) {
         container.innerHTML = '<div class="empty-state">No devices found</div>';
         return;
       }
+
+      const expanded = loadExpanded();
 
       // Group devices by location (bindSpaceId).
       const groupMap = {};
@@ -1029,22 +1258,45 @@ const pages = {
           <div class="location-group" data-space-id="${esc(sid)}">
             <div class="location-group-header">
               <h3>${esc(spaceName)}</h3>
-              <span class="location-count">${devices.length} device${devices.length !== 1 ? 's' : ''}</span>
+              <span class="location-count">${devices.length} device${
+                devices.length !== 1 ? 's' : ''
+              }</span>
             </div>
             <div class="card-grid" data-space-id="${esc(sid)}">`;
         devices.forEach((d) => {
           const name = esc(deviceName(d));
           const online = d.isOnline === true || d.online === true;
+          const icon = categoryIcon(d.category);
+          const isExpanded = !!expanded[d.id];
+          const expandedClass = isExpanded ? ' expanded' : '';
+          const detailsClass = isExpanded ? ' visible' : '';
+
           html += `
-              <div class="card" draggable="true" data-device-id="${esc(d.id)}" id="device-card-${esc(d.id)}">
+              <div class="card" data-device-id="${esc(d.id)}"
+                id="device-card-${esc(d.id)}">
+                <span class="device-type-icon" title="${esc(
+                  d.category ? d.category.toUpperCase() : ''
+                )}">${icon}</span>
                 <div class="device-header">
                   <span class="status-dot ${online ? 'online' : 'offline'}"></span>
                   <span class="device-name" title="${name}">${name}</span>
-                  ${d.category ? `<span class="badge badge-category">${esc(d.category)}</span>` : ''}
                 </div>
-                <div class="device-id" title="${esc(d.id)}">${esc(d.id)}</div>
-                <div class="device-dps" id="dps-${esc(d.id)}">
-                  <div class="loading">Loading status...</div>
+                <button class="card-expand-btn${expandedClass}"
+                  id="expand-btn-${esc(d.id)}"
+                  onclick="toggleCardExpand('${esc(d.id)}')">
+                  <span class="expand-arrow">&#9654;</span>
+                  Details
+                </button>
+                <div class="card-details${detailsClass}" id="details-${esc(d.id)}">
+                  <div class="device-tags">
+                    ${d.category ? `<span class="badge badge-category">${
+                      esc(d.category.toUpperCase())
+                    }</span>` : ''}
+                    <span class="badge badge-id">${esc(d.id)}</span>
+                  </div>
+                  <div class="device-dps" id="dps-${esc(d.id)}" data-loaded="false">
+                    <div class="loading">Loading status...</div>
+                  </div>
                 </div>
               </div>`;
         });
@@ -1053,12 +1305,24 @@ const pages = {
           </div>`;
       }
       html += '</div>';
+
+      // Preserve edit mode class if active.
+      const wasEditMode = container.classList.contains('edit-mode');
       container.innerHTML = html;
+      if (wasEditMode || state.editMode) {
+        container.classList.add('edit-mode');
+        container.querySelectorAll('.card[data-device-id]').forEach((c) => {
+          c.setAttribute('draggable', 'true');
+        });
+      }
 
       // Wire up drag-and-drop on all card grids.
       container.querySelectorAll('.card-grid[data-space-id]').forEach((grid) => {
         this.initDragDrop(grid);
       });
+
+      // Auto-load status for expanded cards only.
+      this.autoLoadStatus(expanded);
     },
 
     /* ── Drag-and-Drop ── */
@@ -1066,7 +1330,8 @@ const pages = {
       let draggedCard = null;
 
       grid.addEventListener('dragstart', (e) => {
-        const card = e.target.closest('.card[draggable]');
+        if (!state.editMode) { e.preventDefault(); return; }
+        const card = e.target.closest('.card[data-device-id]');
         if (!card) return;
         draggedCard = card;
         card.classList.add('dragging');
@@ -1075,16 +1340,17 @@ const pages = {
       });
 
       grid.addEventListener('dragend', (e) => {
-        const card = e.target.closest('.card[draggable]');
+        const card = e.target.closest('.card[data-device-id]');
         if (card) card.classList.remove('dragging');
         grid.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
         draggedCard = null;
       });
 
       grid.addEventListener('dragover', (e) => {
+        if (!state.editMode) return;
         e.preventDefault();
         e.dataTransfer.dropEffect = 'move';
-        const target = e.target.closest('.card[draggable]');
+        const target = e.target.closest('.card[data-device-id]');
         grid.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
         if (target && target !== draggedCard) {
           target.classList.add('drag-over');
@@ -1092,16 +1358,17 @@ const pages = {
       });
 
       grid.addEventListener('dragleave', (e) => {
-        const target = e.target.closest('.card[draggable]');
+        const target = e.target.closest('.card[data-device-id]');
         if (target) target.classList.remove('drag-over');
       });
 
       grid.addEventListener('drop', (e) => {
+        if (!state.editMode) return;
         e.preventDefault();
         grid.querySelectorAll('.drag-over').forEach((el) => el.classList.remove('drag-over'));
         if (!draggedCard) return;
 
-        const target = e.target.closest('.card[draggable]');
+        const target = e.target.closest('.card[data-device-id]');
         if (!target || target === draggedCard) return;
 
         // Determine position: insert before or after target.
@@ -1121,8 +1388,14 @@ const pages = {
       });
     },
 
-    autoLoadStatus() {
-      state.devices.forEach((d) => this.loadStatus(d.id));
+    autoLoadStatus(expanded) {
+      // Only auto-load status for cards that are expanded.
+      const expandedIds = expanded || loadExpanded();
+      state.devices.forEach((d) => {
+        if (expandedIds[d.id]) {
+          this.loadStatus(d.id);
+        }
+      });
     },
 
     async loadStatus(deviceId) {
@@ -1135,7 +1408,9 @@ const pages = {
           api.get(`/api/devices/${deviceId}/functions`).catch(() => ({ functions: [] })),
         ]);
 
-        const statusList = Array.isArray(statusData) ? statusData : (statusData.result || statusData.status || []);
+        const statusList = Array.isArray(statusData)
+          ? statusData
+          : (statusData.result || statusData.status || []);
         const funcList = (funcData.functions || funcData.result?.functions || []);
         const funcCodes = new Set(funcList.map((f) => f.code));
         const funcMap = {};
@@ -1155,7 +1430,8 @@ const pages = {
                 <span class="toggle-label">${esc(dp.code)}</span>
                 <label class="toggle">
                   <input type="checkbox" ${checked}
-                    onchange="pages.devices.sendCommand('${esc(deviceId)}', '${esc(dp.code)}', this.checked)">
+                    onchange="pages.devices.sendCommand('${esc(deviceId)}',
+                      '${esc(dp.code)}', this.checked)">
                   <span class="toggle-slider"></span>
                 </label>
               </div>`;
@@ -1164,11 +1440,15 @@ const pages = {
               <div class="dp-row">
                 <span class="dp-code">${esc(dp.code)}</span>
                 <span class="dp-value">${esc(JSON.stringify(dp.value))}</span>
-                <input class="inline-input" id="input-${esc(deviceId)}-${esc(dp.code)}"
-                  value="${esc(typeof dp.value === 'object' ? JSON.stringify(dp.value) : dp.value)}"
+                <input class="inline-input"
+                  id="input-${esc(deviceId)}-${esc(dp.code)}"
+                  value="${esc(
+                    typeof dp.value === 'object' ? JSON.stringify(dp.value) : dp.value
+                  )}"
                   placeholder="value">
                 <button class="btn btn-primary btn-sm"
-                  onclick="pages.devices.sendFromInput('${esc(deviceId)}', '${esc(dp.code)}')">Send</button>
+                  onclick="pages.devices.sendFromInput('${esc(deviceId)}',
+                    '${esc(dp.code)}')">Send</button>
               </div>`;
           } else {
             html += `
@@ -1179,9 +1459,12 @@ const pages = {
           }
         });
 
-        dpsEl.innerHTML = html || '<div class="empty-state" style="padding:8px;">No data points</div>';
+        dpsEl.innerHTML = html ||
+          '<div class="empty-state" style="padding:8px;">No data points</div>';
+        dpsEl.dataset.loaded = 'true';
       } catch (e) {
-        dpsEl.innerHTML = `<div class="empty-state" style="color:var(--danger);padding:8px;">Error: ${esc(e.message)}</div>`;
+        dpsEl.innerHTML = `<div class="empty-state" style="color:var(--danger);padding:8px;">\
+Error: ${esc(e.message)}</div>`;
       }
     },
 
@@ -1320,7 +1603,9 @@ const pages = {
         state.devices.forEach((d) => { deviceMap[d.id] = deviceName(d); });
 
         let html = `<div class="table-wrap"><table>
-          <thead><tr><th>Time</th><th>Device</th><th>Code</th><th>Value</th><th>Source</th></tr></thead>
+          <thead><tr>
+            <th>Time</th><th>Device</th><th>Code</th><th>Value</th><th>Source</th>
+          </tr></thead>
           <tbody>`;
         logs.forEach((l) => {
           const ts = formatTime(l.event_time || l.timestamp);
@@ -1329,7 +1614,9 @@ const pages = {
             <td>${esc(ts)}</td>
             <td class="mono" title="${esc(l.device_id)}">${devLabel}</td>
             <td class="mono">${esc(l.code)}</td>
-            <td class="mono">${esc(typeof l.value === 'object' ? JSON.stringify(l.value) : l.value)}</td>
+            <td class="mono">${esc(
+              typeof l.value === 'object' ? JSON.stringify(l.value) : l.value
+            )}</td>
             <td>${esc(l.source || '')}</td>
           </tr>`;
         });
@@ -1399,7 +1686,8 @@ const pages = {
     renderFeed() {
       const feed = document.getElementById('event-feed');
       if (!state.events.length) {
-        feed.innerHTML = '<div class="empty-state">No events yet. Waiting for data...</div>';
+        feed.innerHTML =
+          '<div class="empty-state">No events yet. Waiting for data...</div>';
         return;
       }
       feed.innerHTML = state.events.map((ev) => this.eventHTML(ev)).join('');
@@ -1415,7 +1703,8 @@ const pages = {
     eventHTML(ev) {
       const ts = formatTime(ev.timestamp);
       const color = eventTypeColor(ev.event_type);
-      const dataStr = typeof ev.data === 'object' ? JSON.stringify(ev.data, null, 2) : esc(ev.data || '');
+      const dataStr = typeof ev.data === 'object'
+        ? JSON.stringify(ev.data, null, 2) : esc(ev.data || '');
       return `
         <div class="event-item">
           <div class="event-item-header">
@@ -1444,20 +1733,28 @@ const pages = {
 
         document.getElementById('status-stats').innerHTML = `
           <div class="stat-card">
-            <div class="stat-number">${esc(stats.total_logs != null ? stats.total_logs : '---')}</div>
+            <div class="stat-number">${esc(
+              stats.total_logs != null ? stats.total_logs : '---'
+            )}</div>
             <div class="stat-label">Total Logs</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number">${esc(stats.total_devices != null ? stats.total_devices : '---')}</div>
+            <div class="stat-number">${esc(
+              stats.total_devices != null ? stats.total_devices : '---'
+            )}</div>
             <div class="stat-label">Devices Tracked</div>
           </div>
           <div class="stat-card">
-            <div class="stat-number">${esc(stats.total_runs != null ? stats.total_runs : '---')}</div>
+            <div class="stat-number">${esc(
+              stats.total_runs != null ? stats.total_runs : '---'
+            )}</div>
             <div class="stat-label">Collection Runs</div>
           </div>`;
 
         if (bookmarkList.length) {
-          let bhtml = '<table><thead><tr><th>Device ID</th><th>Last Event Time</th></tr></thead><tbody>';
+          let bhtml = '<table><thead><tr>' +
+            '<th>Device ID</th><th>Last Event Time</th>' +
+            '</tr></thead><tbody>';
           bookmarkList.forEach((b) => {
             bhtml += `<tr>
               <td class="mono">${esc(b.device_id)}</td>
@@ -1472,13 +1769,16 @@ const pages = {
         }
 
         if (runList.length) {
-          let rhtml = '<table><thead><tr><th>ID</th><th>Started</th><th>Duration</th>' +
-            '<th>Devices</th><th>Logs</th><th>Status</th></tr></thead><tbody>';
+          let rhtml = '<table><thead><tr>' +
+            '<th>ID</th><th>Started</th><th>Duration</th>' +
+            '<th>Devices</th><th>Logs</th><th>Status</th>' +
+            '</tr></thead><tbody>';
           runList.forEach((r) => {
             const started = formatTime(r.started_at);
             let duration = '---';
             if (r.started_at && r.finished_at) {
-              const ms = new Date(r.finished_at).getTime() - new Date(r.started_at).getTime();
+              const ms = new Date(r.finished_at).getTime() -
+                new Date(r.started_at).getTime();
               duration = ms < 1000 ? ms + 'ms' : (ms / 1000).toFixed(1) + 's';
             }
             const statusClass = r.status === 'completed' ? 'badge-success' :
@@ -1487,9 +1787,15 @@ const pages = {
               <td class="mono">${esc(r.id)}</td>
               <td>${esc(started)}</td>
               <td>${esc(duration)}</td>
-              <td>${esc(r.devices_count != null ? r.devices_count : '---')}</td>
-              <td>${esc(r.logs_collected != null ? r.logs_collected : '---')}</td>
-              <td><span class="badge ${statusClass}">${esc(r.status || 'unknown')}</span></td>
+              <td>${esc(
+                r.devices_count != null ? r.devices_count : '---'
+              )}</td>
+              <td>${esc(
+                r.logs_collected != null ? r.logs_collected : '---'
+              )}</td>
+              <td><span class="badge ${statusClass}">${
+                esc(r.status || 'unknown')
+              }</span></td>
             </tr>`;
           });
           rhtml += '</tbody></table>';
