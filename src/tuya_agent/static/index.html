@@ -1607,13 +1607,12 @@ const pages = {
       const isDimmer = statusMap.bright_value != null && funcMap.bright_value;
 
       if (isLock) {
-        // Lock: show unlock button with 10s timer.
-        const locked = statusMap.reverse_lock === true ||
-          statusMap.lock_motor_state === true;
+        // Lock: show unlock button via ble_unlock_check with 20s visual timer.
+        const locked = statusMap.lock_motor_state !== true;
         html += `<button class="unlock-btn" id="unlock-btn-${esc(deviceId)}"
           onclick="pages.devices.tempUnlock('${esc(deviceId)}')"
-          title="Temporarily unlock for 10 seconds">
-          ${locked ? '\u{1F513}' : '\u{1F512}'} Unlock
+          title="Temporarily unlock for 20 seconds">
+          ${locked ? '\u{1F512}' : '\u{1F513}'} Unlock
         </button>`;
       } else if (isCarRemote) {
         // Car Remote HHR: show toggle_1, toggle_2, toggle_3 as momentary buttons.
@@ -1675,41 +1674,32 @@ const pages = {
       }
     },
 
-    /* ── Temporary Unlock (10 seconds) ── */
+    /* ── Temporary Unlock (20-second visual timer) ── */
     async tempUnlock(deviceId) {
       const btn = document.getElementById('unlock-btn-' + deviceId);
       if (!btn || btn.disabled) return;
       btn.disabled = true;
 
       try {
-        // Send unlock command (reverse_lock = false means unlocked).
+        // Send BLE unlock check command to unlock the door.
         await api.post(`/api/devices/${deviceId}/commands`, {
-          commands: [{ code: 'reverse_lock', value: false }],
+          commands: [{ code: 'ble_unlock_check', value: true }],
         });
 
         btn.classList.add('unlocked');
-        btn.innerHTML = '\u{1F513} Unlocked <span class="unlock-countdown">10s</span>';
+        btn.innerHTML = '\u{1F513} Unlocked <span class="unlock-countdown">20s</span>';
 
-        let remaining = 10;
+        let remaining = 20;
         const interval = setInterval(() => {
           remaining--;
           const span = btn.querySelector('.unlock-countdown');
           if (span) span.textContent = remaining + 's';
           if (remaining <= 0) {
             clearInterval(interval);
-            // Re-lock.
-            api.post(`/api/devices/${deviceId}/commands`, {
-              commands: [{ code: 'reverse_lock', value: true }],
-            }).then(() => {
-              btn.classList.remove('unlocked');
-              btn.innerHTML = '\u{1F512} Unlock';
-              btn.disabled = false;
-            }).catch(() => {
-              btn.classList.remove('unlocked');
-              btn.innerHTML = '\u{1F512} Unlock';
-              btn.disabled = false;
-              toast('Failed to re-lock', 'error');
-            });
+            // Visual reset only — lock re-engages on its own.
+            btn.classList.remove('unlocked');
+            btn.innerHTML = '\u{1F512} Unlock';
+            btn.disabled = false;
           }
         }, 1000);
       } catch (e) {
