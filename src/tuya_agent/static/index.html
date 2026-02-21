@@ -161,6 +161,34 @@ body {
   margin-top: 4px;
 }
 
+/* ── Location Groups ── */
+.location-group {
+  margin-bottom: 28px;
+}
+
+.location-group-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.location-group-header h3 {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.location-group-header .location-count {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  background: var(--border);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
 /* ── Cards Grid ── */
 .card-grid {
   display: grid;
@@ -816,6 +844,7 @@ td.mono {
 const state = {
   currentPage: null,
   devices: [],
+  spaces: {},       // { spaceId: "Space Name", ... }
   scenes: [],
   events: [],
   eventSource: null,
@@ -889,10 +918,29 @@ const pages = {
       try {
         const data = await api.get('/api/devices');
         state.devices = data.list || data || [];
+        await this.resolveSpaces();
         this.render();
+        this.autoLoadStatus();
       } catch (e) {
         toast('Failed to load devices: ' + e.message, 'error');
       }
+    },
+
+    async resolveSpaces() {
+      const ids = new Set();
+      state.devices.forEach((d) => {
+        const sid = d.bindSpaceId || d.bind_space_id;
+        if (sid && !state.spaces[sid]) ids.add(sid);
+      });
+      const fetches = [...ids].map(async (sid) => {
+        try {
+          const info = await api.get(`/api/spaces/${sid}`);
+          state.spaces[sid] = info.name || sid;
+        } catch {
+          state.spaces[sid] = sid;
+        }
+      });
+      await Promise.all(fetches);
     },
 
     render() {
@@ -901,28 +949,57 @@ const pages = {
         grid.innerHTML = '<div class="empty-state">No devices found</div>';
         return;
       }
-      grid.innerHTML = state.devices.map((d) => {
-        const name = esc(d.custom_name || d.name || d.id);
-        const online = d.online === true || d.online === 'true';
-        return `
-          <div class="card" id="device-card-${esc(d.id)}">
-            <div class="device-header">
-              <span class="status-dot ${online ? 'online' : 'offline'}"></span>
-              <span class="device-name" title="${name}">${name}</span>
-              ${d.category ? `<span class="badge badge-category">${esc(d.category)}</span>` : ''}
+
+      // Group devices by location (bindSpaceId).
+      const groups = {};
+      state.devices.forEach((d) => {
+        const sid = d.bindSpaceId || d.bind_space_id || '_ungrouped';
+        if (!groups[sid]) groups[sid] = [];
+        groups[sid].push(d);
+      });
+
+      let html = '';
+      for (const [sid, devices] of Object.entries(groups)) {
+        const spaceName = state.spaces[sid] || (sid === '_ungrouped' ? 'Other' : sid);
+        html += `
+          <div class="location-group">
+            <div class="location-group-header">
+              <h3>${esc(spaceName)}</h3>
+              <span class="location-count">${devices.length} device${devices.length !== 1 ? 's' : ''}</span>
             </div>
-            <div class="device-id" title="${esc(d.id)}">${esc(d.id)}</div>
-            <button class="btn btn-secondary btn-sm" onclick="pages.devices.loadStatus('${esc(d.id)}')">Load Status</button>
-            <div class="device-dps" id="dps-${esc(d.id)}" style="display:none;"></div>
+            <div class="card-grid">`;
+        devices.forEach((d) => {
+          const name = esc(d.customName || d.custom_name || d.name || d.id);
+          const online = d.isOnline === true || d.online === true;
+          html += `
+              <div class="card" id="device-card-${esc(d.id)}">
+                <div class="device-header">
+                  <span class="status-dot ${online ? 'online' : 'offline'}"></span>
+                  <span class="device-name" title="${name}">${name}</span>
+                  ${d.category ? `<span class="badge badge-category">${esc(d.category)}</span>` : ''}
+                </div>
+                <div class="device-id" title="${esc(d.id)}">${esc(d.id)}</div>
+                <div class="device-dps" id="dps-${esc(d.id)}">
+                  <div class="loading">Loading status…</div>
+                </div>
+              </div>`;
+        });
+        html += `
+            </div>
           </div>`;
-      }).join('');
+      }
+      grid.innerHTML = html;
+    },
+
+    autoLoadStatus() {
+      // Load status for every device in parallel without blocking render.
+      state.devices.forEach((d) => this.loadStatus(d.id));
     },
 
     async loadStatus(deviceId) {
       const dpsEl = document.getElementById('dps-' + deviceId);
       if (!dpsEl) return;
-      dpsEl.style.display = 'block';
-      dpsEl.innerHTML = '<div class="loading">Loading...</div>';
+      dpsEl.innerHTML = '<div class="loading">Loading…</div>';
 
       try {
         const [statusData, funcData] = await Promise.all([
@@ -1006,7 +1083,8 @@ const pages = {
   scenes: {
     async load() {
       if (!state.homeId && state.devices.length) {
-        state.homeId = state.devices[0].owner_id || null;
+        state.homeId = state.devices[0].bindSpaceId ||
+          state.devices[0].owner_id || null;
       }
       if (!state.homeId) {
         document.getElementById('scenes-home-input').style.display = 'flex';
@@ -1068,7 +1146,7 @@ const pages = {
       const existing = sel.value;
       sel.innerHTML = '<option value="">All Devices</option>' +
         state.devices.map((d) => {
-          const label = d.custom_name || d.name || d.id;
+          const label = d.customName || d.custom_name || d.name || d.id;
           return `<option value="${esc(d.id)}">${esc(label)}</option>`;
         }).join('');
       sel.value = existing;
@@ -1111,7 +1189,7 @@ const pages = {
         }
 
         const deviceMap = {};
-        state.devices.forEach((d) => { deviceMap[d.id] = d.custom_name || d.name || d.id; });
+        state.devices.forEach((d) => { deviceMap[d.id] = d.customName || d.custom_name || d.name || d.id; });
 
         let html = `<div class="table-wrap"><table>
           <thead><tr><th>Time</th><th>Device</th><th>Code</th><th>Value</th><th>Source</th></tr></thead>
@@ -1320,12 +1398,6 @@ function navigate(page) {
 
 /* ─────────────────────────── Init ─────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
-  try {
-    const data = await api.get('/api/devices');
-    state.devices = data.list || data || [];
-  } catch {
-    /* devices will load when navigating */
-  }
   navigate('devices');
   pages.events.connect();
 });

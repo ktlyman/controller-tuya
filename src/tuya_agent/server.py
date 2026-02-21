@@ -345,6 +345,19 @@ def create_app(
             _handle_tuya_error(exc)
 
     # ===================================================================
+    # Space endpoints
+    # ===================================================================
+
+    @app.get("/api/spaces/{space_id}")
+    async def get_space(space_id: str) -> dict[str, Any]:
+        try:
+            return await _client().request(
+                "GET", f"/v2.0/cloud/space/{space_id}",
+            )
+        except TuyaAPIError as exc:
+            _handle_tuya_error(exc)
+
+    # ===================================================================
     # Log / storage endpoints
     # ===================================================================
 

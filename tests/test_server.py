@@ -55,6 +55,11 @@ def _mock_client() -> MagicMock:
     ])
     client.scenes.trigger_scene = AsyncMock(return_value=True)
 
+    # generic request (used by spaces endpoint)
+    client.request = AsyncMock(return_value={
+        "id": 12345, "name": "My Home", "root_id": 12345, "status": True,
+    })
+
     return client
 
 
@@ -194,6 +199,18 @@ class TestSceneEndpoints:
         assert resp.json()["success"] is True
         mock_tuya.scenes.trigger_scene.assert_called_once_with(
             "home1", "sc1",
+        )
+
+
+class TestSpaceEndpoints:
+    async def test_get_space(self, client) -> None:
+        ac, mock_tuya, _ = client
+        resp = await ac.get("/api/spaces/12345")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["name"] == "My Home"
+        mock_tuya.request.assert_called_once_with(
+            "GET", "/v2.0/cloud/space/12345",
         )
 
 
