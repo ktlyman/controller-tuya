@@ -779,6 +779,148 @@ td.mono {
   margin-top: 2px;
 }
 
+/* ── Quick Controls (minimized card) ── */
+.card-quick-controls {
+  margin-top: 6px;
+  min-height: 28px;
+}
+
+.quick-battery {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.quick-battery .batt-icon { font-size: 13px; }
+.quick-battery.low { color: var(--danger); }
+.quick-battery.mid { color: #eab308; }
+.quick-battery.high { color: var(--success); }
+
+.quick-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Lock Unlock Button ── */
+.unlock-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.unlock-btn:hover { background: rgba(59, 130, 246, 0.12); border-color: var(--accent); }
+.unlock-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.unlock-btn.unlocked {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.unlock-btn.unlocking {
+  background: rgba(234, 179, 8, 0.15);
+  border-color: #eab308;
+  color: #eab308;
+}
+
+.unlock-countdown {
+  font-family: var(--mono);
+  font-size: 11px;
+  margin-left: 2px;
+}
+
+/* ── Brightness Slider ── */
+.brightness-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.brightness-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.1);
+  outline: none;
+  cursor: pointer;
+}
+
+.brightness-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--card-bg);
+  box-shadow: 0 0 4px rgba(59, 130, 246, 0.4);
+}
+
+.brightness-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: 2px solid var(--card-bg);
+}
+
+.brightness-pct {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-secondary);
+  min-width: 32px;
+  text-align: right;
+}
+
+/* ── Momentary / Toggle Buttons ── */
+.quick-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text-secondary);
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.quick-toggle-btn:hover {
+  background: rgba(59, 130, 246, 0.12);
+  color: var(--text);
+  border-color: var(--accent);
+}
+
+.quick-toggle-btn.on {
+  background: rgba(59, 130, 246, 0.2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 /* ── Device DPs Area ── */
 .device-dps {
   border-top: 1px solid var(--border);
@@ -990,6 +1132,7 @@ const state = {
   currentPage: null,
   devices: [],
   spaces: {},       // { spaceId: "Space Name", ... }
+  deviceStatus: {},  // { deviceId: { status: [...], functions: [...] } }
   scenes: [],
   events: [],
   eventSource: null,
@@ -1281,6 +1424,10 @@ const pages = {
                   <span class="status-dot ${online ? 'online' : 'offline'}"></span>
                   <span class="device-name" title="${name}">${name}</span>
                 </div>
+                <div class="card-quick-controls"
+                  id="quick-${esc(d.id)}"
+                  data-category="${esc(d.category || '')}"
+                  data-device-name="${esc(deviceName(d))}"></div>
                 <button class="card-expand-btn${expandedClass}"
                   id="expand-btn-${esc(d.id)}"
                   onclick="toggleCardExpand('${esc(d.id)}')">
@@ -1389,83 +1536,271 @@ const pages = {
     },
 
     autoLoadStatus(expanded) {
-      // Only auto-load status for cards that are expanded.
-      const expandedIds = expanded || loadExpanded();
+      // Load status for ALL devices to populate quick controls.
       state.devices.forEach((d) => {
-        if (expandedIds[d.id]) {
-          this.loadStatus(d.id);
-        }
+        this.fetchDeviceData(d.id, !!(expanded || loadExpanded())[d.id]);
       });
     },
 
-    async loadStatus(deviceId) {
-      const dpsEl = document.getElementById('dps-' + deviceId);
-      if (!dpsEl) return;
-
+    async fetchDeviceData(deviceId, alsoRenderDetails) {
       try {
         const [statusData, funcData] = await Promise.all([
           api.get(`/api/devices/${deviceId}/status`),
-          api.get(`/api/devices/${deviceId}/functions`).catch(() => ({ functions: [] })),
+          api.get(`/api/devices/${deviceId}/functions`).catch(() => ({
+            functions: [],
+          })),
         ]);
 
         const statusList = Array.isArray(statusData)
           ? statusData
           : (statusData.result || statusData.status || []);
-        const funcList = (funcData.functions || funcData.result?.functions || []);
-        const funcCodes = new Set(funcList.map((f) => f.code));
+        const funcList = funcData.functions || funcData.result?.functions || [];
         const funcMap = {};
         funcList.forEach((f) => { funcMap[f.code] = f; });
 
-        let html = '';
-        statusList.forEach((dp) => {
-          const fn = funcMap[dp.code];
-          const isBool = (fn && fn.type === 'Boolean') ||
-            (typeof dp.value === 'boolean') ||
-            (fn && fn.values && /"type":\s*"bool"/.test(fn.values));
+        state.deviceStatus[deviceId] = { status: statusList, funcMap };
 
-          if (isBool && funcCodes.has(dp.code)) {
-            const checked = dp.value === true || dp.value === 'true' ? 'checked' : '';
-            html += `
-              <div class="toggle-wrap">
-                <span class="toggle-label">${esc(dp.code)}</span>
-                <label class="toggle">
-                  <input type="checkbox" ${checked}
-                    onchange="pages.devices.sendCommand('${esc(deviceId)}',
-                      '${esc(dp.code)}', this.checked)">
-                  <span class="toggle-slider"></span>
-                </label>
-              </div>`;
-          } else if (funcCodes.has(dp.code)) {
-            html += `
-              <div class="dp-row">
-                <span class="dp-code">${esc(dp.code)}</span>
-                <span class="dp-value">${esc(JSON.stringify(dp.value))}</span>
-                <input class="inline-input"
-                  id="input-${esc(deviceId)}-${esc(dp.code)}"
-                  value="${esc(
-                    typeof dp.value === 'object' ? JSON.stringify(dp.value) : dp.value
-                  )}"
-                  placeholder="value">
-                <button class="btn btn-primary btn-sm"
-                  onclick="pages.devices.sendFromInput('${esc(deviceId)}',
-                    '${esc(dp.code)}')">Send</button>
-              </div>`;
-          } else {
-            html += `
-              <div class="dp-row">
-                <span class="dp-code">${esc(dp.code)}</span>
-                <span class="dp-value">${esc(JSON.stringify(dp.value))}</span>
-              </div>`;
-          }
+        // Always render quick controls.
+        this.renderQuickControls(deviceId);
+
+        // Render expanded details if needed.
+        if (alsoRenderDetails) {
+          this.renderDetails(deviceId);
+        }
+      } catch (e) {
+        const quickEl = document.getElementById('quick-' + deviceId);
+        if (quickEl) quickEl.innerHTML = '';
+      }
+    },
+
+    /* ── Quick Controls ── */
+    renderQuickControls(deviceId) {
+      const quickEl = document.getElementById('quick-' + deviceId);
+      if (!quickEl) return;
+
+      const cached = state.deviceStatus[deviceId];
+      if (!cached) return;
+
+      const { status, funcMap } = cached;
+      const statusMap = {};
+      status.forEach((dp) => { statusMap[dp.code] = dp.value; });
+
+      const category = (quickEl.dataset.category || '').toLowerCase();
+      const dName = quickEl.dataset.deviceName || '';
+      let html = '';
+
+      // Battery (residual_electricity) — shown for any device that has it.
+      if (statusMap.residual_electricity != null) {
+        const batt = Number(statusMap.residual_electricity);
+        const cls = batt <= 20 ? 'low' : batt <= 50 ? 'mid' : 'high';
+        const icon = batt <= 20 ? '\u{1FAAB}' : '\u{1F50B}';
+        html += `<div class="quick-battery ${cls}">
+          <span class="batt-icon">${icon}</span> ${batt}%
+        </div>`;
+      }
+
+      html += '<div class="quick-row">';
+
+      // Determine which quick control to show based on device type.
+      const isLock = category === 'jtmspro' || category === 'jtms' || category === 'ms';
+      const isCarRemote = /car.*remote|car.*hhr/i.test(dName);
+      const isDimmer = statusMap.bright_value != null && funcMap.bright_value;
+
+      if (isLock) {
+        // Lock: show unlock button with 10s timer.
+        const locked = statusMap.reverse_lock === true ||
+          statusMap.lock_motor_state === true;
+        html += `<button class="unlock-btn" id="unlock-btn-${esc(deviceId)}"
+          onclick="pages.devices.tempUnlock('${esc(deviceId)}')"
+          title="Temporarily unlock for 10 seconds">
+          ${locked ? '\u{1F513}' : '\u{1F512}'} Unlock
+        </button>`;
+      } else if (isCarRemote) {
+        // Car Remote HHR: show toggle_1, toggle_2, toggle_3 as momentary buttons.
+        [1, 2, 3].forEach((n) => {
+          const code = `switch_${n}`;
+          const isOn = statusMap[code] === true;
+          html += `<button class="quick-toggle-btn${isOn ? ' on' : ''}"
+            onclick="pages.devices.momentaryToggle('${esc(deviceId)}', '${code}', this)"
+            title="${code}">
+            ${n}
+          </button>`;
+        });
+      } else if (isDimmer) {
+        // Dimmer light: show brightness slider (and switch_led toggle).
+        const bright = Number(statusMap.bright_value) || 25;
+        const valInfo = funcMap.bright_value.values ?
+          JSON.parse(funcMap.bright_value.values) : {};
+        const min = valInfo.min || 25;
+        const max = valInfo.max || 255;
+        const pct = Math.round(((bright - min) / (max - min)) * 100);
+        const switchOn = statusMap.switch_led === true;
+        html += `<label class="toggle" style="flex-shrink:0;">
+            <input type="checkbox" ${switchOn ? 'checked' : ''}
+              onchange="pages.devices.sendCommand('${esc(deviceId)}',
+                'switch_led', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+          <div class="brightness-wrap">
+            <input type="range" class="brightness-slider"
+              id="bright-${esc(deviceId)}"
+              min="${min}" max="${max}" value="${bright}"
+              oninput="pages.devices.updateBrightLabel('${esc(deviceId)}',
+                this.value, ${min}, ${max})"
+              onchange="pages.devices.sendCommand('${esc(deviceId)}',
+                'bright_value', Number(this.value))">
+            <span class="brightness-pct"
+              id="bright-pct-${esc(deviceId)}">${pct}%</span>
+          </div>`;
+      } else if (statusMap.switch_1 != null && funcMap.switch_1) {
+        // Generic switch_1 toggle (plugs, lights, Outer Door, etc.).
+        const isOn = statusMap.switch_1 === true;
+        html += `<label class="toggle">
+            <input type="checkbox" ${isOn ? 'checked' : ''}
+              onchange="pages.devices.sendCommand('${esc(deviceId)}',
+                'switch_1', this.checked)">
+            <span class="toggle-slider"></span>
+          </label>`;
+      }
+
+      html += '</div>';
+      quickEl.innerHTML = html;
+    },
+
+    updateBrightLabel(deviceId, value, min, max) {
+      const pctEl = document.getElementById('bright-pct-' + deviceId);
+      if (pctEl) {
+        const pct = Math.round(((Number(value) - min) / (max - min)) * 100);
+        pctEl.textContent = pct + '%';
+      }
+    },
+
+    /* ── Temporary Unlock (10 seconds) ── */
+    async tempUnlock(deviceId) {
+      const btn = document.getElementById('unlock-btn-' + deviceId);
+      if (!btn || btn.disabled) return;
+      btn.disabled = true;
+
+      try {
+        // Send unlock command (reverse_lock = false means unlocked).
+        await api.post(`/api/devices/${deviceId}/commands`, {
+          commands: [{ code: 'reverse_lock', value: false }],
         });
 
-        dpsEl.innerHTML = html ||
-          '<div class="empty-state" style="padding:8px;">No data points</div>';
-        dpsEl.dataset.loaded = 'true';
+        btn.classList.add('unlocked');
+        btn.innerHTML = '\u{1F513} Unlocked <span class="unlock-countdown">10s</span>';
+
+        let remaining = 10;
+        const interval = setInterval(() => {
+          remaining--;
+          const span = btn.querySelector('.unlock-countdown');
+          if (span) span.textContent = remaining + 's';
+          if (remaining <= 0) {
+            clearInterval(interval);
+            // Re-lock.
+            api.post(`/api/devices/${deviceId}/commands`, {
+              commands: [{ code: 'reverse_lock', value: true }],
+            }).then(() => {
+              btn.classList.remove('unlocked');
+              btn.innerHTML = '\u{1F512} Unlock';
+              btn.disabled = false;
+            }).catch(() => {
+              btn.classList.remove('unlocked');
+              btn.innerHTML = '\u{1F512} Unlock';
+              btn.disabled = false;
+              toast('Failed to re-lock', 'error');
+            });
+          }
+        }, 1000);
       } catch (e) {
-        dpsEl.innerHTML = `<div class="empty-state" style="color:var(--danger);padding:8px;">\
-Error: ${esc(e.message)}</div>`;
+        btn.disabled = false;
+        toast('Unlock failed: ' + e.message, 'error');
       }
+    },
+
+    /* ── Momentary toggle for Car Remote buttons ── */
+    async momentaryToggle(deviceId, code, btn) {
+      if (btn.disabled) return;
+      btn.disabled = true;
+      try {
+        await api.post(`/api/devices/${deviceId}/commands`, {
+          commands: [{ code, value: true }],
+        });
+        btn.classList.add('on');
+        toast(`Sent ${code} = true`, 'success');
+        // The remote's switch_type is "button" so it auto-resets.
+        setTimeout(() => {
+          btn.classList.remove('on');
+          btn.disabled = false;
+        }, 1500);
+      } catch (e) {
+        btn.disabled = false;
+        toast('Command failed: ' + e.message, 'error');
+      }
+    },
+
+    /* ── Expanded Details ── */
+    renderDetails(deviceId) {
+      const dpsEl = document.getElementById('dps-' + deviceId);
+      if (!dpsEl) return;
+
+      const cached = state.deviceStatus[deviceId];
+      if (!cached) return;
+
+      const { status, funcMap } = cached;
+      const funcCodes = new Set(Object.keys(funcMap));
+
+      let html = '';
+      status.forEach((dp) => {
+        const fn = funcMap[dp.code];
+        const isBool = (fn && fn.type === 'Boolean') ||
+          (typeof dp.value === 'boolean') ||
+          (fn && fn.values && /"type":\s*"bool"/.test(fn.values));
+
+        if (isBool && funcCodes.has(dp.code)) {
+          const checked = dp.value === true || dp.value === 'true' ? 'checked' : '';
+          html += `
+            <div class="toggle-wrap">
+              <span class="toggle-label">${esc(dp.code)}</span>
+              <label class="toggle">
+                <input type="checkbox" ${checked}
+                  onchange="pages.devices.sendCommand('${esc(deviceId)}',
+                    '${esc(dp.code)}', this.checked)">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>`;
+        } else if (funcCodes.has(dp.code)) {
+          html += `
+            <div class="dp-row">
+              <span class="dp-code">${esc(dp.code)}</span>
+              <span class="dp-value">${esc(JSON.stringify(dp.value))}</span>
+              <input class="inline-input"
+                id="input-${esc(deviceId)}-${esc(dp.code)}"
+                value="${esc(
+                  typeof dp.value === 'object' ? JSON.stringify(dp.value) : dp.value
+                )}"
+                placeholder="value">
+              <button class="btn btn-primary btn-sm"
+                onclick="pages.devices.sendFromInput('${esc(deviceId)}',
+                  '${esc(dp.code)}')">Send</button>
+            </div>`;
+        } else {
+          html += `
+            <div class="dp-row">
+              <span class="dp-code">${esc(dp.code)}</span>
+              <span class="dp-value">${esc(JSON.stringify(dp.value))}</span>
+            </div>`;
+        }
+      });
+
+      dpsEl.innerHTML = html ||
+        '<div class="empty-state" style="padding:8px;">No data points</div>';
+      dpsEl.dataset.loaded = 'true';
+    },
+
+    async loadStatus(deviceId) {
+      // Delegate to fetchDeviceData which handles both quick + detail rendering.
+      await this.fetchDeviceData(deviceId, true);
     },
 
     async sendCommand(deviceId, code, value) {
