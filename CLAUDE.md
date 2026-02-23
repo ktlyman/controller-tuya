@@ -11,7 +11,7 @@
 - `src/tuya_agent/` contains all library source code as a single flat Python package
 - `src/tuya_agent/client.py` is the core async HTTP client; all domain modules depend on it
 - `src/tuya_agent/auth.py` handles HMAC-SHA256 request signing and token lifecycle
-- `src/tuya_agent/devices.py`, `src/tuya_agent/logs.py`, `src/tuya_agent/scenes.py`, `src/tuya_agent/events.py` are domain mixins attached to the client
+- `src/tuya_agent/devices.py`, `src/tuya_agent/logs.py`, `src/tuya_agent/scenes.py`, `src/tuya_agent/spaces.py`, `src/tuya_agent/events.py` are domain mixins attached to the client
 - `src/tuya_agent/tools.py` provides the agent-facing tool registry and `dispatch()` entry point
 - `src/tuya_agent/storage.py` is the SQLite storage layer for persisting device logs with deduplication
 - `src/tuya_agent/collector.py` orchestrates periodic API-based log collection across all devices

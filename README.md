@@ -97,6 +97,8 @@ async with TuyaClient() as client:
 | `get_device` | Get detailed information about a specific device |
 | `get_device_status` | Get current data-point values (code/value pairs) |
 | `get_device_specification` | Get the device's supported instructions and status data points |
+| `get_device_functions` | Get writable functions a device supports (codes and value ranges) |
+| `get_sub_devices` | List sub-devices connected to a gateway (Zigbee/BLE mesh) |
 | `control_device` | Send control commands (code + value) to a device |
 
 ### Event & Log Queries
@@ -112,25 +114,46 @@ async with TuyaClient() as client:
 
 | Tool | Description |
 |---|---|
-| `list_scenes` | List all tap-to-run scenes in a home |
-| `trigger_scene` | Execute a tap-to-run scene |
-| `get_automation` | Get details for an automation rule |
-| `enable_automation` | Enable a disabled automation |
-| `disable_automation` | Disable an active automation |
+| `list_scenes` | List scenes and automations in a space (v2.0 Cloud API) |
+| `trigger_scene` | Trigger (execute) a scene or automation rule by ID |
+
+### Log Collection & Storage
+
+| Tool | Description |
+|---|---|
+| `collect_logs` | Trigger a one-shot collection of device event logs into SQLite |
+| `get_collection_status` | Get statistics about the local log database and per-device bookmarks |
+| `query_logs` | Search the local log database with device, time, and code filters |
+| `get_collection_runs` | Get recent collection run history with timestamps and status |
+| `watch_realtime_events` | Subscribe to real-time Pulsar events and store them in SQLite |
+
+### Space & Location
+
+| Tool | Description |
+|---|---|
+| `resolve_space` | Resolve a space ID to its name and details |
 
 ## Module Overview
 
 ```
 src/tuya_agent/
 ├── __init__.py     # Public API: TuyaClient, TuyaConfig
+├── __main__.py     # CLI entry point: collect, watch, serve, status subcommands
 ├── config.py       # Region-based URL resolution, env var loading via pydantic-settings
 ├── auth.py         # HMAC-SHA256 request signing, token lifecycle management
 ├── client.py       # Core async HTTP client with automatic token refresh
+├── collector.py    # Periodic API-based log collection across all devices
 ├── devices.py      # Device list, details, status, control, sub-devices
 ├── events.py       # Real-time Pulsar WebSocket event subscription
 ├── logs.py         # Historic event logs, DP report logs, aggregated statistics
-├── scenes.py       # Scene CRUD and automation enable/disable
-└── tools.py        # Agent tool registry (JSON-schema descriptors) and dispatcher
+├── scenes.py       # Scene listing and triggering (v2.0 Cloud API) plus automation management
+├── spaces.py       # Space (location) resolution
+├── server.py       # FastAPI web server with REST endpoints and SSE for the dashboard
+├── storage.py      # SQLite storage layer for persisting device logs with deduplication
+├── tools.py        # Agent tool registry (JSON-schema descriptors) and dispatcher
+├── watcher.py      # Streams real-time Pulsar WebSocket events into SQLite storage
+└── static/
+    └── index.html  # Self-contained HTML/CSS/JS dashboard
 ```
 
 ## Authentication
@@ -170,6 +193,32 @@ Event types include `dp_report` (status changes), `online`, `offline`, `bind`, `
 | Central Europe | `eu` | `openapi.tuyaeu.com` |
 | China | `cn` | `openapi.tuyacn.com` |
 | India | `in` | `openapi.tuyain.com` |
+
+## CLI Commands
+
+The package includes a CLI for running background services:
+
+```bash
+# Collect device event logs into SQLite (one-shot or periodic)
+python -m tuya_agent collect [--db tuya_logs.db] [--interval 300]
+
+# Stream real-time Pulsar events into SQLite
+python -m tuya_agent watch [--db tuya_logs.db]
+
+# Start the web dashboard
+python -m tuya_agent serve [--host 127.0.0.1] [--port 8000] [--db tuya_logs.db]
+
+# Show collection status
+python -m tuya_agent status [--db tuya_logs.db]
+```
+
+## Web Dashboard
+
+The `serve` command launches a FastAPI server with a self-contained dashboard at `http://localhost:8000`. The dashboard provides:
+
+- **Devices** — live status, grouped by location, with quick controls (locks, switches, dimmers)
+- **Scenes** — tap-to-run scenes and automations, organized by space
+- **Logs** — searchable event history with device and date filters
 
 ## Development
 

@@ -38,11 +38,13 @@ class TuyaClient:
         from tuya_agent.events import EventsMixin
         from tuya_agent.logs import LogsMixin
         from tuya_agent.scenes import ScenesMixin
+        from tuya_agent.spaces import SpacesMixin
 
         self.devices = DevicesMixin(self)
         self.events = EventsMixin(self)
         self.logs = LogsMixin(self)
         self.scenes = ScenesMixin(self)
+        self.spaces = SpacesMixin(self)
 
     async def __aenter__(self) -> TuyaClient:
         await self.ensure_token()

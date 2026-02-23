@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import NamedTuple
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -12,6 +13,14 @@ from httpx import ASGITransport
 from tuya_agent.client import TuyaAPIError
 from tuya_agent.server import EventBroadcaster, create_app
 from tuya_agent.storage import LogRecord, LogStorage
+
+
+class ServerFixture(NamedTuple):
+    """Test fixture exposing the async HTTP client and injected mocks."""
+
+    http: httpx.AsyncClient
+    tuya: MagicMock
+    storage: LogStorage
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -56,8 +65,8 @@ def _mock_client() -> MagicMock:
     })
     client.scenes.trigger_rule = AsyncMock(return_value=True)
 
-    # generic request (used by spaces endpoint)
-    client.request = AsyncMock(return_value={
+    # spaces
+    client.spaces.get = AsyncMock(return_value={
         "id": 12345, "name": "My Home", "root_id": 12345, "status": True,
     })
 
@@ -90,7 +99,7 @@ def _seed_storage(storage: LogStorage) -> None:
 
 
 @pytest.fixture
-async def client():
+async def fx():
     """Async test client with mocked Tuya deps and seeded storage."""
     mock_tuya = _mock_client()
     storage = LogStorage(Path(":memory:"))
@@ -110,7 +119,7 @@ async def client():
     async with httpx.AsyncClient(
         transport=transport, base_url="http://testserver",
     ) as ac:
-        yield ac, mock_tuya, storage
+        yield ServerFixture(http=ac, tuya=mock_tuya, storage=storage)
 
     storage.close()
 
@@ -121,141 +130,132 @@ async def client():
 
 
 class TestRootEndpoint:
-    async def test_root_returns_html(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/")
+    async def test_root_returns_html(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/")
         assert resp.status_code == 200
         assert "text/html" in resp.headers.get("content-type", "")
 
 
 class TestDeviceEndpoints:
-    async def test_list_devices(self, client) -> None:
-        ac, mock_tuya, _ = client
-        resp = await ac.get("/api/devices")
+    async def test_list_devices(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/devices")
         assert resp.status_code == 200
         data = resp.json()
         assert "list" in data
-        mock_tuya.devices.list.assert_called_once()
+        fx.tuya.devices.list.assert_called_once()
 
-    async def test_get_device(self, client) -> None:
-        ac, mock_tuya, _ = client
-        resp = await ac.get("/api/devices/dev1")
+    async def test_get_device(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/devices/dev1")
         assert resp.status_code == 200
         assert resp.json()["id"] == "dev1"
-        mock_tuya.devices.get.assert_called_once_with("dev1")
+        fx.tuya.devices.get.assert_called_once_with("dev1")
 
-    async def test_get_device_status(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/devices/dev1/status")
+    async def test_get_device_status(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/devices/dev1/status")
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
         assert data[0]["code"] == "switch_1"
 
-    async def test_get_device_specification(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/devices/dev1/specification")
+    async def test_get_device_specification(
+        self, fx: ServerFixture,
+    ) -> None:
+        resp = await fx.http.get("/api/devices/dev1/specification")
         assert resp.status_code == 200
         assert "category" in resp.json()
 
-    async def test_get_device_functions(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/devices/dev1/functions")
+    async def test_get_device_functions(
+        self, fx: ServerFixture,
+    ) -> None:
+        resp = await fx.http.get("/api/devices/dev1/functions")
         assert resp.status_code == 200
         assert "functions" in resp.json()
 
-    async def test_send_commands(self, client) -> None:
-        ac, mock_tuya, _ = client
-        resp = await ac.post(
+    async def test_send_commands(self, fx: ServerFixture) -> None:
+        resp = await fx.http.post(
             "/api/devices/dev1/commands",
             json={"commands": [{"code": "switch_1", "value": True}]},
         )
         assert resp.status_code == 200
         assert resp.json()["success"] is True
-        mock_tuya.devices.send_commands.assert_called_once()
+        fx.tuya.devices.send_commands.assert_called_once()
 
-    async def test_tuya_api_error_returns_502(self, client) -> None:
-        ac, mock_tuya, _ = client
-        mock_tuya.devices.list = AsyncMock(
+    async def test_tuya_api_error_returns_502(
+        self, fx: ServerFixture,
+    ) -> None:
+        fx.tuya.devices.list = AsyncMock(
             side_effect=TuyaAPIError(1010, "token invalid"),
         )
-        resp = await ac.get("/api/devices")
+        resp = await fx.http.get("/api/devices")
         assert resp.status_code == 502
         assert resp.json()["detail"]["tuya_code"] == 1010
 
 
 class TestSceneEndpoints:
-    async def test_list_scenes(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/spaces/space1/scenes")
+    async def test_list_scenes(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/spaces/space1/scenes")
         assert resp.status_code == 200
         data = resp.json()
         assert data["list"][0]["name"] == "Good Night"
 
-    async def test_trigger_scene(self, client) -> None:
-        ac, mock_tuya, _ = client
-        resp = await ac.post("/api/scenes/sc1/trigger")
+    async def test_trigger_scene(self, fx: ServerFixture) -> None:
+        resp = await fx.http.post("/api/scenes/sc1/trigger")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
-        mock_tuya.scenes.trigger_rule.assert_called_once_with("sc1")
+        fx.tuya.scenes.trigger_rule.assert_called_once_with("sc1")
 
 
 class TestSpaceEndpoints:
-    async def test_get_space(self, client) -> None:
-        ac, mock_tuya, _ = client
-        resp = await ac.get("/api/spaces/12345")
+    async def test_get_space(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/spaces/12345")
         assert resp.status_code == 200
         data = resp.json()
         assert data["name"] == "My Home"
-        mock_tuya.request.assert_called_once_with(
-            "GET", "/v2.0/cloud/space/12345",
-        )
+        fx.tuya.spaces.get.assert_called_once_with("12345")
 
 
 class TestStorageEndpoints:
-    async def test_query_logs(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/logs")
+    async def test_query_logs(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/logs")
         assert resp.status_code == 200
         data = resp.json()
         assert "logs" in data
         assert data["total"] == 3
 
-    async def test_query_logs_with_device_filter(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/logs?device_id=dev1")
+    async def test_query_logs_with_device_filter(
+        self, fx: ServerFixture,
+    ) -> None:
+        resp = await fx.http.get("/api/logs?device_id=dev1")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total"] == 2
         assert all(row["device_id"] == "dev1" for row in data["logs"])
 
-    async def test_query_logs_with_code_filter(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/logs?code=switch_1")
+    async def test_query_logs_with_code_filter(
+        self, fx: ServerFixture,
+    ) -> None:
+        resp = await fx.http.get("/api/logs?code=switch_1")
         assert resp.status_code == 200
         assert resp.json()["total"] == 2
 
-    async def test_get_stats(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/logs/stats")
+    async def test_get_stats(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/logs/stats")
         assert resp.status_code == 200
         data = resp.json()
         assert data["total_logs"] == 3
         assert data["total_devices"] == 2
         assert data["total_runs"] == 1
 
-    async def test_get_bookmarks(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/logs/bookmarks")
+    async def test_get_bookmarks(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/logs/bookmarks")
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
         assert len(data) == 1
         assert data[0]["device_id"] == "dev1"
 
-    async def test_get_runs(self, client) -> None:
-        ac, _, _ = client
-        resp = await ac.get("/api/logs/runs")
+    async def test_get_runs(self, fx: ServerFixture) -> None:
+        resp = await fx.http.get("/api/logs/runs")
         assert resp.status_code == 200
         data = resp.json()
         assert isinstance(data, list)
@@ -264,13 +264,15 @@ class TestStorageEndpoints:
 
 
 class TestSSEEndpoint:
-    async def test_event_stream_content_type(self, client) -> None:
+    async def test_event_stream_content_type(
+        self, fx: ServerFixture,
+    ) -> None:
         import asyncio
 
-        ac, _, _ = client
-
         async def _check() -> None:
-            async with ac.stream("GET", "/api/events/stream") as resp:
+            async with fx.http.stream(
+                "GET", "/api/events/stream",
+            ) as resp:
                 assert resp.status_code == 200
                 assert "text/event-stream" in resp.headers.get(
                     "content-type", "",

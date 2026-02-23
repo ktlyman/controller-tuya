@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any
 
 import websockets
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from tuya_agent.client import TuyaAPIError, TuyaClient
@@ -212,6 +212,20 @@ def create_app(
         lifespan=lifespan,
     )
 
+    # -- Global exception handler for Tuya API errors --------------------
+
+    @app.exception_handler(TuyaAPIError)
+    async def _tuya_error_handler(
+        request: Request, exc: TuyaAPIError,
+    ) -> JSONResponse:
+        return JSONResponse(
+            status_code=502,
+            content={"detail": {
+                "tuya_code": exc.code,
+                "tuya_msg": exc.msg,
+            }},
+        )
+
     # -- CORS (permissive for local dev) ---------------------------------
     app.add_middleware(
         CORSMiddleware,
@@ -232,13 +246,6 @@ def create_app(
     def _broadcaster() -> EventBroadcaster:
         return state["broadcaster"]
 
-    def _handle_tuya_error(exc: TuyaAPIError) -> None:
-        """Translate a TuyaAPIError into an HTTPException."""
-        raise HTTPException(
-            status_code=502,
-            detail={"tuya_code": exc.code, "tuya_msg": exc.msg},
-        )
-
     # ===================================================================
     # Static / root
     # ===================================================================
@@ -258,67 +265,43 @@ def create_app(
         page_size: int = Query(20, ge=1, le=100),
         last_row_key: str | None = Query(None),
     ) -> Any:
-        try:
-            result = await _client().devices.list(
-                page_size=page_size,
-                last_row_key=last_row_key,
-            )
-            # The Tuya API may return a plain list or a dict with
-            # pagination metadata — normalise to a consistent shape.
-            if isinstance(result, list):
-                return {"list": result, "total": len(result)}
-            return result
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+        result = await _client().devices.list(
+            page_size=page_size,
+            last_row_key=last_row_key,
+        )
+        # The Tuya API may return a plain list or a dict with
+        # pagination metadata — normalise to a consistent shape.
+        if isinstance(result, list):
+            return {"list": result, "total": len(result)}
+        return result
 
     @app.get("/api/devices/{device_id}")
     async def get_device(device_id: str) -> dict[str, Any]:
-        try:
-            return await _client().devices.get(device_id)
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+        return await _client().devices.get(device_id)
 
     @app.get("/api/devices/{device_id}/status")
-    async def get_device_status(
-        device_id: str,
-    ) -> list[dict[str, Any]]:
-        try:
-            return await _client().devices.get_status(device_id)
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+    async def get_device_status(device_id: str) -> list[dict[str, Any]]:
+        return await _client().devices.get_status(device_id)
 
     @app.get("/api/devices/{device_id}/specification")
     async def get_device_specification(
         device_id: str,
     ) -> dict[str, Any]:
-        try:
-            return await _client().devices.get_specification(
-                device_id,
-            )
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+        return await _client().devices.get_specification(device_id)
 
     @app.get("/api/devices/{device_id}/functions")
-    async def get_device_functions(
-        device_id: str,
-    ) -> dict[str, Any]:
-        try:
-            return await _client().devices.get_functions(device_id)
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+    async def get_device_functions(device_id: str) -> dict[str, Any]:
+        return await _client().devices.get_functions(device_id)
 
     @app.post("/api/devices/{device_id}/commands")
     async def send_commands(
         device_id: str,
         body: SendCommandsRequest,
     ) -> dict[str, bool]:
-        try:
-            result = await _client().devices.send_commands(
-                device_id, body.commands,
-            )
-            return {"success": result}
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+        result = await _client().devices.send_commands(
+            device_id, body.commands,
+        )
+        return {"success": result}
 
     # ===================================================================
     # Scene endpoints
@@ -326,18 +309,12 @@ def create_app(
 
     @app.get("/api/spaces/{space_id}/scenes")
     async def list_scenes(space_id: str) -> Any:
-        try:
-            return await _client().scenes.list_rules(space_id)
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+        return await _client().scenes.list_rules(space_id)
 
     @app.post("/api/scenes/{rule_id}/trigger")
     async def trigger_scene(rule_id: str) -> dict[str, bool]:
-        try:
-            result = await _client().scenes.trigger_rule(rule_id)
-            return {"success": result}
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+        result = await _client().scenes.trigger_rule(rule_id)
+        return {"success": result}
 
     # ===================================================================
     # Space endpoints
@@ -345,12 +322,7 @@ def create_app(
 
     @app.get("/api/spaces/{space_id}")
     async def get_space(space_id: str) -> dict[str, Any]:
-        try:
-            return await _client().request(
-                "GET", f"/v2.0/cloud/space/{space_id}",
-            )
-        except TuyaAPIError as exc:
-            _handle_tuya_error(exc)
+        return await _client().spaces.get(space_id)
 
     # ===================================================================
     # Log / storage endpoints

@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import json
 import logging
+from collections.abc import Callable
 from typing import Any
 
 import websockets
@@ -62,46 +63,13 @@ class EventWatcher:
         Runs indefinitely unless ``duration`` (seconds) is set.
         Returns the number of events stored.
         """
-        if duration is not None:
-            try:
-                await asyncio.wait_for(
-                    self._stream(), timeout=duration,
-                )
-            except (asyncio.TimeoutError, StopAsyncIteration):
-                pass
-        else:
-            await self._stream()
-
+        await self._run_loop(duration=duration)
         logger.info("Watcher stopped — %d events stored", self._count)
         return self._count
 
-    async def _stream(self) -> None:
-        """Internal loop: subscribe and store each event."""
-        logger.info("Connecting to Tuya Pulsar WebSocket...")
-        try:
-            async for event in self._client.events.subscribe():
-                record = event_to_record(event)
-                inserted = self._storage.insert_logs([record])
-
-                if inserted:
-                    self._count += 1
-                    self._storage.set_device_bookmark(
-                        event.device_id, event.timestamp,
-                    )
-
-                _log_event(event, new=bool(inserted))
-        except websockets.exceptions.InvalidStatus as exc:
-            if exc.response.status_code == 401:
-                logger.error(
-                    "Pulsar WebSocket returned 401 Unauthorized. "
-                    "Ensure the Message Service is enabled in your Tuya "
-                    "cloud project and message rules are active."
-                )
-            raise
-
     async def run_with_callback(
         self,
-        callback: Any = None,
+        callback: Callable[[TuyaEvent, bool], Any] | None = None,
         *,
         duration: float | None = None,
     ) -> list[dict[str, Any]]:
@@ -112,32 +80,70 @@ class EventWatcher:
         """
         summaries: list[dict[str, Any]] = []
 
-        async def _gather() -> None:
-            async for event in self._client.events.subscribe():
-                record = event_to_record(event)
-                inserted = self._storage.insert_logs([record])
-                if inserted:
-                    self._count += 1
-                    self._storage.set_device_bookmark(
-                        event.device_id, event.timestamp,
-                    )
-                summaries.append({
-                    "device_id": event.device_id,
-                    "event_type": event.event_type,
-                    "data": event.data,
-                    "timestamp": event.timestamp,
-                    "stored": bool(inserted),
-                })
-                _log_event(event, new=bool(inserted))
+        def _on_event(event: TuyaEvent, stored: bool) -> None:
+            summaries.append({
+                "device_id": event.device_id,
+                "event_type": event.event_type,
+                "data": event.data,
+                "timestamp": event.timestamp,
+                "stored": stored,
+            })
+            if callback:
+                callback(event, stored)
 
-        try:
-            await asyncio.wait_for(
-                _gather(), timeout=duration or 60,
-            )
-        except (asyncio.TimeoutError, StopAsyncIteration):
-            pass
-
+        await self._run_loop(duration=duration, on_event=_on_event)
         return summaries
+
+    # -- internal ------------------------------------------------------------
+
+    async def _run_loop(
+        self,
+        *,
+        duration: float | None = None,
+        on_event: Callable[[TuyaEvent, bool], Any] | None = None,
+    ) -> None:
+        """Core subscribe→store→bookmark loop.
+
+        If *duration* is set, stops after that many seconds.
+        If *on_event* is provided, calls it with ``(event, stored)``
+        for each received event.
+        """
+
+        async def _stream() -> None:
+            logger.info("Connecting to Tuya Pulsar WebSocket...")
+            try:
+                async for event in self._client.events.subscribe():
+                    record = event_to_record(event)
+                    inserted = self._storage.insert_logs([record])
+                    stored = bool(inserted)
+
+                    if stored:
+                        self._count += 1
+                        self._storage.set_device_bookmark(
+                            event.device_id, event.timestamp,
+                        )
+
+                    if on_event:
+                        on_event(event, stored)
+
+                    _log_event(event, new=stored)
+            except websockets.exceptions.InvalidStatus as exc:
+                if exc.response.status_code == 401:
+                    logger.error(
+                        "Pulsar WebSocket returned 401 Unauthorized. "
+                        "Ensure the Message Service is enabled in "
+                        "your Tuya cloud project and message rules "
+                        "are active."
+                    )
+                raise
+
+        if duration is not None:
+            try:
+                await asyncio.wait_for(_stream(), timeout=duration)
+            except (asyncio.TimeoutError, StopAsyncIteration):
+                pass
+        else:
+            await _stream()
 
 
 def _log_event(event: TuyaEvent, *, new: bool) -> None:

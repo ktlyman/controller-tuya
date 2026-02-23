@@ -212,20 +212,20 @@ class LogStorage:
 
     # -- Query helpers -------------------------------------------------------
 
-    def query_logs(
+    _LOG_COLUMNS = (
+        "device_id", "event_id", "event_time",
+        "event_from", "code", "value", "status",
+    )
+
+    def _build_where(
         self,
         *,
         device_id: str | None = None,
         start_time: int | None = None,
         end_time: int | None = None,
         code: str | None = None,
-        limit: int = 100,
-        offset: int = 0,
-    ) -> tuple[list[dict[str, Any]], int]:
-        """Query device_logs with optional filters.
-
-        Returns ``(rows_as_dicts, total_count)``.
-        """
+    ) -> tuple[str, list[Any]]:
+        """Build a WHERE clause and parameter list from optional filters."""
         clauses: list[str] = []
         params: list[Any] = []
         if device_id:
@@ -240,30 +240,44 @@ class LogStorage:
         if code:
             clauses.append("code = ?")
             params.append(code)
-
         where = " AND ".join(clauses) if clauses else "1=1"
+        return where, params
 
-        total: int = self.conn.execute(
-            f"SELECT COUNT(*) FROM device_logs WHERE {where}",
-            params,
-        ).fetchone()[0]
+    def query_logs(
+        self,
+        *,
+        device_id: str | None = None,
+        start_time: int | None = None,
+        end_time: int | None = None,
+        code: str | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> tuple[list[dict[str, Any]], int]:
+        """Query device_logs with optional filters.
 
-        cols = (
-            "device_id, event_id, event_time, event_from, "
-            "code, value, status"
+        Returns ``(rows_as_dicts, total_count)``.
+        """
+        where, params = self._build_where(
+            device_id=device_id,
+            start_time=start_time,
+            end_time=end_time,
+            code=code,
+        )
+
+        count_sql = "SELECT COUNT(*) FROM device_logs WHERE " + where
+        total: int = self.conn.execute(count_sql, params).fetchone()[0]
+
+        select_cols = ", ".join(self._LOG_COLUMNS)
+        select_sql = (
+            "SELECT " + select_cols
+            + " FROM device_logs WHERE " + where
+            + " ORDER BY event_time DESC LIMIT ? OFFSET ?"
         )
         rows = self.conn.execute(
-            f"SELECT {cols} FROM device_logs "
-            f"WHERE {where} ORDER BY event_time DESC "
-            f"LIMIT ? OFFSET ?",
-            [*params, limit, offset],
+            select_sql, [*params, limit, offset],
         ).fetchall()
 
-        columns = [
-            "device_id", "event_id", "event_time",
-            "event_from", "code", "value", "status",
-        ]
-        return [dict(zip(columns, r)) for r in rows], total
+        return [dict(zip(self._LOG_COLUMNS, r)) for r in rows], total
 
     def get_runs(self, limit: int = 50) -> list[dict[str, Any]]:
         """Return recent collection runs."""

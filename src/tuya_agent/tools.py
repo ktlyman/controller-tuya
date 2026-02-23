@@ -179,6 +179,58 @@ async def control_device(
     return await client.devices.send_commands(device_id, commands)
 
 
+@_register(
+    {
+        "name": "get_device_functions",
+        "description": (
+            "Get the writable functions (commands) a device supports. "
+            "Use this to discover what codes and value ranges "
+            "you can send to control_device."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "The Tuya device ID.",
+                },
+            },
+            "required": ["device_id"],
+        },
+    }
+)
+async def get_device_functions(
+    client: TuyaClient, device_id: str
+) -> dict[str, Any]:
+    return await client.devices.get_functions(device_id)
+
+
+@_register(
+    {
+        "name": "get_sub_devices",
+        "description": (
+            "List sub-devices connected to a gateway device. "
+            "Use this for Zigbee or BLE mesh gateways to "
+            "discover their child devices."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "gateway_id": {
+                    "type": "string",
+                    "description": "The gateway device ID.",
+                },
+            },
+            "required": ["gateway_id"],
+        },
+    }
+)
+async def get_sub_devices(
+    client: TuyaClient, gateway_id: str
+) -> list[dict[str, Any]]:
+    return await client.devices.get_sub_devices(gateway_id)
+
+
 # ---------------------------------------------------------------------------
 # Logging tools
 # ---------------------------------------------------------------------------
@@ -349,130 +401,59 @@ async def get_device_statistics(
 @_register(
     {
         "name": "list_scenes",
-        "description": "List all tap-to-run scenes in a Tuya home.",
+        "description": (
+            "List scenes and automations in a space using the v2.0 Cloud API. "
+            "Returns rules with type, status, name, and actions."
+        ),
         "parameters": {
             "type": "object",
             "properties": {
-                "home_id": {
+                "space_id": {
                     "type": "string",
-                    "description": "The Tuya home ID.",
+                    "description": (
+                        "The Tuya space ID (bindSpaceId from a device)."
+                    ),
+                },
+                "rule_type": {
+                    "type": "string",
+                    "description": (
+                        "Filter by type: 'scene' for tap-to-run, "
+                        "'automation' for automations, or '' for both."
+                    ),
                 },
             },
-            "required": ["home_id"],
+            "required": ["space_id"],
         },
     }
 )
 async def list_scenes(
-    client: TuyaClient, home_id: str
-) -> list[dict[str, Any]]:
-    return await client.scenes.list_scenes(home_id)
+    client: TuyaClient,
+    space_id: str,
+    rule_type: str = "",
+) -> dict[str, Any]:
+    return await client.scenes.list_rules(space_id, rule_type=rule_type)
 
 
 @_register(
     {
         "name": "trigger_scene",
-        "description": "Trigger (execute) a tap-to-run scene.",
+        "description": "Trigger (execute) a scene or automation rule by its ID.",
         "parameters": {
             "type": "object",
             "properties": {
-                "home_id": {
+                "rule_id": {
                     "type": "string",
-                    "description": "The Tuya home ID.",
-                },
-                "scene_id": {
-                    "type": "string",
-                    "description": "The scene ID to trigger.",
+                    "description": "The rule/scene ID to trigger.",
                 },
             },
-            "required": ["home_id", "scene_id"],
+            "required": ["rule_id"],
         },
     }
 )
 async def trigger_scene(
-    client: TuyaClient, home_id: str, scene_id: str
+    client: TuyaClient, rule_id: str
 ) -> bool:
-    return await client.scenes.trigger_scene(home_id, scene_id)
-
-
-@_register(
-    {
-        "name": "get_automation",
-        "description": (
-            "Get details for a single automation rule "
-            "including its conditions, actions, and status."
-        ),
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "home_id": {
-                    "type": "string",
-                    "description": "The Tuya home ID.",
-                },
-                "automation_id": {
-                    "type": "string",
-                    "description": "The automation ID.",
-                },
-            },
-            "required": ["home_id", "automation_id"],
-        },
-    }
-)
-async def get_automation(
-    client: TuyaClient, home_id: str, automation_id: str
-) -> dict[str, Any]:
-    return await client.scenes.get_automation(home_id, automation_id)
-
-
-@_register(
-    {
-        "name": "enable_automation",
-        "description": "Enable a currently disabled automation rule.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "home_id": {
-                    "type": "string",
-                    "description": "The Tuya home ID.",
-                },
-                "automation_id": {
-                    "type": "string",
-                    "description": "The automation ID.",
-                },
-            },
-            "required": ["home_id", "automation_id"],
-        },
-    }
-)
-async def enable_automation(
-    client: TuyaClient, home_id: str, automation_id: str
-) -> bool:
-    return await client.scenes.enable_automation(home_id, automation_id)
-
-
-@_register(
-    {
-        "name": "disable_automation",
-        "description": "Disable an active automation rule.",
-        "parameters": {
-            "type": "object",
-            "properties": {
-                "home_id": {
-                    "type": "string",
-                    "description": "The Tuya home ID.",
-                },
-                "automation_id": {
-                    "type": "string",
-                    "description": "The automation ID.",
-                },
-            },
-            "required": ["home_id", "automation_id"],
-        },
-    }
-)
-async def disable_automation(
-    client: TuyaClient, home_id: str, automation_id: str
-) -> bool:
-    return await client.scenes.disable_automation(home_id, automation_id)
+    return await client.scenes.trigger_rule(rule_id)
 
 
 # ---------------------------------------------------------------------------
@@ -606,6 +587,143 @@ async def get_collection_status(
         bookmarks = storage.get_all_bookmarks()
     stats["bookmarks"] = {did: ts for did, ts in bookmarks}
     return stats
+
+
+@_register(
+    {
+        "name": "query_logs",
+        "description": (
+            "Search the local SQLite log database with optional filters. "
+            "Returns matching log entries and total count."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "db_path": {
+                    "type": "string",
+                    "description": (
+                        "Path to SQLite database (default: tuya_logs.db)."
+                    ),
+                },
+                "device_id": {
+                    "type": "string",
+                    "description": "Filter by device ID.",
+                },
+                "start_time": {
+                    "type": "integer",
+                    "description": "Start time (13-digit ms timestamp).",
+                },
+                "end_time": {
+                    "type": "integer",
+                    "description": "End time (13-digit ms timestamp).",
+                },
+                "code": {
+                    "type": "string",
+                    "description": "Filter by DP code.",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max results (default 100).",
+                },
+                "offset": {
+                    "type": "integer",
+                    "description": "Pagination offset (default 0).",
+                },
+            },
+        },
+    }
+)
+async def query_logs(
+    client: TuyaClient,
+    db_path: str = "tuya_logs.db",
+    device_id: str | None = None,
+    start_time: int | None = None,
+    end_time: int | None = None,
+    code: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+) -> dict[str, Any]:
+    from pathlib import Path
+
+    from tuya_agent.storage import LogStorage
+
+    with LogStorage(Path(db_path)) as storage:
+        rows, total = storage.query_logs(
+            device_id=device_id,
+            start_time=start_time,
+            end_time=end_time,
+            code=code,
+            limit=limit,
+            offset=offset,
+        )
+    return {"logs": rows, "total": total}
+
+
+@_register(
+    {
+        "name": "get_collection_runs",
+        "description": (
+            "Get recent log collection run history from the local "
+            "database, including timestamps, device counts, and status."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "db_path": {
+                    "type": "string",
+                    "description": (
+                        "Path to SQLite database (default: tuya_logs.db)."
+                    ),
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Max runs to return (default 50).",
+                },
+            },
+        },
+    }
+)
+async def get_collection_runs(
+    client: TuyaClient,
+    db_path: str = "tuya_logs.db",
+    limit: int = 50,
+) -> list[dict[str, Any]]:
+    from pathlib import Path
+
+    from tuya_agent.storage import LogStorage
+
+    with LogStorage(Path(db_path)) as storage:
+        return storage.get_runs(limit=limit)
+
+
+# ---------------------------------------------------------------------------
+# Space tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "resolve_space",
+        "description": (
+            "Resolve a Tuya space ID to its details including name "
+            "and location. Use device bindSpaceId as the space_id."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "space_id": {
+                    "type": "string",
+                    "description": "The Tuya space ID.",
+                },
+            },
+            "required": ["space_id"],
+        },
+    }
+)
+async def resolve_space(
+    client: TuyaClient, space_id: str
+) -> dict[str, Any]:
+    return await client.spaces.get(space_id)
 
 
 # ---------------------------------------------------------------------------
