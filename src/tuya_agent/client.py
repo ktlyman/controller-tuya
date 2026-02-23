@@ -36,15 +36,33 @@ class TuyaClient:
         # Attach sub-modules.
         from tuya_agent.devices import DevicesMixin
         from tuya_agent.events import EventsMixin
+        from tuya_agent.firmware import FirmwareMixin
+        from tuya_agent.groups import GroupsMixin
+        from tuya_agent.ir import IRMixin
+        from tuya_agent.location import LocationMixin
+        from tuya_agent.locks import LocksMixin
         from tuya_agent.logs import LogsMixin
+        from tuya_agent.notifications import NotificationsMixin
         from tuya_agent.scenes import ScenesMixin
         from tuya_agent.spaces import SpacesMixin
+        from tuya_agent.templates import TemplatesMixin
+        from tuya_agent.timers import TimersMixin
+        from tuya_agent.weather import WeatherMixin
 
         self.devices = DevicesMixin(self)
         self.events = EventsMixin(self)
+        self.firmware = FirmwareMixin(self)
+        self.groups = GroupsMixin(self)
+        self.ir = IRMixin(self)
+        self.location = LocationMixin(self)
+        self.locks = LocksMixin(self)
         self.logs = LogsMixin(self)
+        self.notifications = NotificationsMixin(self)
         self.scenes = ScenesMixin(self)
         self.spaces = SpacesMixin(self)
+        self.templates = TemplatesMixin(self)
+        self.timers = TimersMixin(self)
+        self.weather = WeatherMixin(self)
 
     async def __aenter__(self) -> TuyaClient:
         await self.ensure_token()

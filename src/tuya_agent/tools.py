@@ -781,6 +781,575 @@ async def watch_realtime_events(
 
 
 # ---------------------------------------------------------------------------
+# Timer tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "list_device_timers",
+        "description": (
+            "List all scheduled timer tasks for a device. "
+            "Returns timer IDs, schedules, and associated commands."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "The Tuya device ID.",
+                },
+            },
+            "required": ["device_id"],
+        },
+    }
+)
+async def list_device_timers(
+    client: TuyaClient, device_id: str
+) -> list[dict[str, Any]]:
+    return await client.timers.list_tasks(device_id)
+
+
+@_register(
+    {
+        "name": "add_device_timer",
+        "description": (
+            "Create a scheduled timer on a device. Specify when "
+            "and what commands to execute on a schedule."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "The Tuya device ID.",
+                },
+                "loops": {
+                    "type": "string",
+                    "description": (
+                        "7-char day-of-week mask (e.g. '0111110' "
+                        "for Mon-Fri). '0000000' for one-shot."
+                    ),
+                },
+                "time_zone": {
+                    "type": "string",
+                    "description": "IANA time zone (e.g. 'America/Los_Angeles').",
+                },
+                "functions": {
+                    "type": "array",
+                    "description": (
+                        "Commands to run when timer fires. "
+                        "Each has 'code' and 'value'."
+                    ),
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "code": {"type": "string"},
+                            "value": {},
+                        },
+                        "required": ["code", "value"],
+                    },
+                },
+            },
+            "required": ["device_id", "functions"],
+        },
+    }
+)
+async def add_device_timer(
+    client: TuyaClient,
+    device_id: str,
+    functions: list[dict[str, Any]],
+    loops: str = "0000000",
+    time_zone: str = "",
+) -> dict[str, Any]:
+    return await client.timers.add_task(
+        device_id, loops=loops, time_zone=time_zone, functions=functions,
+    )
+
+
+@_register(
+    {
+        "name": "toggle_device_timer",
+        "description": "Enable or disable a specific timer task on a device.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "The Tuya device ID.",
+                },
+                "timer_id": {
+                    "type": "string",
+                    "description": "The timer task ID.",
+                },
+                "state": {
+                    "type": "boolean",
+                    "description": "True to enable, false to disable.",
+                },
+            },
+            "required": ["device_id", "timer_id", "state"],
+        },
+    }
+)
+async def toggle_device_timer(
+    client: TuyaClient,
+    device_id: str,
+    timer_id: str,
+    state: bool,
+) -> bool:
+    return await client.timers.set_task_state(
+        device_id, timer_id=timer_id, state=state,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Weather tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "get_weather_forecast",
+        "description": (
+            "Get weather forecast for a Tuya city ID. "
+            "Returns temperature, humidity, conditions, etc."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "city_id": {
+                    "type": "string",
+                    "description": "The Tuya city ID.",
+                },
+            },
+            "required": ["city_id"],
+        },
+    }
+)
+async def get_weather_forecast(
+    client: TuyaClient, city_id: str
+) -> dict[str, Any]:
+    return await client.weather.get_forecast(city_id)
+
+
+@_register(
+    {
+        "name": "get_weather_by_location",
+        "description": (
+            "Get current weather at a geographic coordinate "
+            "(longitude/latitude)."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "lon": {
+                    "type": "number",
+                    "description": "Longitude.",
+                },
+                "lat": {
+                    "type": "number",
+                    "description": "Latitude.",
+                },
+            },
+            "required": ["lon", "lat"],
+        },
+    }
+)
+async def get_weather_by_location(
+    client: TuyaClient, lon: float, lat: float
+) -> dict[str, Any]:
+    return await client.weather.get_current_by_location(lon=lon, lat=lat)
+
+
+# ---------------------------------------------------------------------------
+# Lock tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "unlock_door",
+        "description": (
+            "Trigger a password-free unlock on a smart lock. "
+            "The lock must support password-free open-door."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "The smart lock device ID.",
+                },
+            },
+            "required": ["device_id"],
+        },
+    }
+)
+async def unlock_door(
+    client: TuyaClient, device_id: str
+) -> bool:
+    return await client.locks.password_free_unlock(device_id)
+
+
+@_register(
+    {
+        "name": "remote_unlock_door",
+        "description": (
+            "Remote unlock via the smart-lock API. Uses a different "
+            "endpoint from unlock_door for locks that support it."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "The smart lock device ID.",
+                },
+            },
+            "required": ["device_id"],
+        },
+    }
+)
+async def remote_unlock_door(
+    client: TuyaClient, device_id: str
+) -> bool:
+    return await client.locks.remote_unlock(device_id)
+
+
+# ---------------------------------------------------------------------------
+# IR control tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "list_ir_remotes",
+        "description": (
+            "List virtual remotes configured on an infrared control hub."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "infrared_id": {
+                    "type": "string",
+                    "description": "The IR hub device ID.",
+                },
+            },
+            "required": ["infrared_id"],
+        },
+    }
+)
+async def list_ir_remotes(
+    client: TuyaClient, infrared_id: str
+) -> list[dict[str, Any]]:
+    return await client.ir.list_remotes(infrared_id)
+
+
+@_register(
+    {
+        "name": "get_ir_remote_keys",
+        "description": (
+            "Get available keys (buttons) for a virtual IR remote."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "infrared_id": {
+                    "type": "string",
+                    "description": "The IR hub device ID.",
+                },
+                "remote_id": {
+                    "type": "string",
+                    "description": "The virtual remote ID.",
+                },
+            },
+            "required": ["infrared_id", "remote_id"],
+        },
+    }
+)
+async def get_ir_remote_keys(
+    client: TuyaClient, infrared_id: str, remote_id: str
+) -> dict[str, Any]:
+    return await client.ir.get_remote_keys(infrared_id, remote_id)
+
+
+@_register(
+    {
+        "name": "send_ir_command",
+        "description": (
+            "Send an IR key-press command through a virtual remote "
+            "on an IR hub."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "infrared_id": {
+                    "type": "string",
+                    "description": "The IR hub device ID.",
+                },
+                "remote_id": {
+                    "type": "string",
+                    "description": "The virtual remote ID.",
+                },
+                "key": {
+                    "type": "string",
+                    "description": "The key/button name to press.",
+                },
+            },
+            "required": ["infrared_id", "remote_id", "key"],
+        },
+    }
+)
+async def send_ir_command(
+    client: TuyaClient,
+    infrared_id: str,
+    remote_id: str,
+    key: str,
+) -> bool:
+    return await client.ir.send_command(
+        infrared_id, remote_id, key=key,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Location tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "get_device_location",
+        "description": (
+            "Get the real-time GPS location of a device "
+            "that supports location tracking."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "The Tuya device ID.",
+                },
+            },
+            "required": ["device_id"],
+        },
+    }
+)
+async def get_device_location(
+    client: TuyaClient, device_id: str
+) -> dict[str, Any]:
+    return await client.location.get_realtime_location(device_id)
+
+
+# ---------------------------------------------------------------------------
+# Firmware tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "get_firmware_info",
+        "description": (
+            "Get firmware version info and available upgrades "
+            "for a device."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "device_id": {
+                    "type": "string",
+                    "description": "The Tuya device ID.",
+                },
+            },
+            "required": ["device_id"],
+        },
+    }
+)
+async def get_firmware_info(
+    client: TuyaClient, device_id: str
+) -> list[dict[str, Any]]:
+    return await client.firmware.get_info(device_id)
+
+
+# ---------------------------------------------------------------------------
+# Group tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "list_device_groups",
+        "description": (
+            "List device groups with pagination. "
+            "Returns group IDs, names, and device counts."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "page_no": {
+                    "type": "integer",
+                    "description": "Page number (default 1).",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "description": "Results per page (default 20).",
+                },
+            },
+        },
+    }
+)
+async def list_device_groups(
+    client: TuyaClient,
+    page_no: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    return await client.groups.list_groups(
+        page_no=page_no, page_size=page_size,
+    )
+
+
+@_register(
+    {
+        "name": "get_device_group",
+        "description": (
+            "Get details of a device group including its "
+            "member devices."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "group_id": {
+                    "type": "string",
+                    "description": "The device group ID.",
+                },
+            },
+            "required": ["group_id"],
+        },
+    }
+)
+async def get_device_group(
+    client: TuyaClient, group_id: str
+) -> dict[str, Any]:
+    return await client.groups.get(group_id)
+
+
+# ---------------------------------------------------------------------------
+# Scene template tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "list_scene_templates",
+        "description": (
+            "List available pre-built scene templates with pagination."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "page_no": {
+                    "type": "integer",
+                    "description": "Page number (default 1).",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "description": "Results per page (default 20).",
+                },
+            },
+        },
+    }
+)
+async def list_scene_templates(
+    client: TuyaClient,
+    page_no: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    return await client.templates.list_templates(
+        page_no=page_no, page_size=page_size,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Extended space tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "list_spaces",
+        "description": (
+            "List all Tuya spaces (locations/rooms) with pagination."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "page_no": {
+                    "type": "integer",
+                    "description": "Page number (default 1).",
+                },
+                "page_size": {
+                    "type": "integer",
+                    "description": "Results per page (default 20).",
+                },
+            },
+        },
+    }
+)
+async def list_spaces(
+    client: TuyaClient,
+    page_no: int = 1,
+    page_size: int = 20,
+) -> dict[str, Any]:
+    return await client.spaces.list_spaces(
+        page_no=page_no, page_size=page_size,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Notification tools
+# ---------------------------------------------------------------------------
+
+
+@_register(
+    {
+        "name": "send_notification",
+        "description": (
+            "Send a push notification to Tuya app users. "
+            "Specify title, content, and target user IDs."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "title": {
+                    "type": "string",
+                    "description": "Notification title.",
+                },
+                "content": {
+                    "type": "string",
+                    "description": "Notification body text.",
+                },
+                "target_user_ids": {
+                    "type": "array",
+                    "description": "List of Tuya user IDs to notify.",
+                    "items": {"type": "string"},
+                },
+            },
+            "required": ["title", "content", "target_user_ids"],
+        },
+    }
+)
+async def send_notification(
+    client: TuyaClient,
+    title: str,
+    content: str,
+    target_user_ids: list[str],
+) -> Any:
+    return await client.notifications.push(
+        title=title, content=content, target_user_ids=target_user_ids,
+    )
+
+
+# ---------------------------------------------------------------------------
 # Dispatcher
 # ---------------------------------------------------------------------------
 

@@ -11,7 +11,8 @@
 - `src/tuya_agent/` contains all library source code as a single flat Python package
 - `src/tuya_agent/client.py` is the core async HTTP client; all domain modules depend on it
 - `src/tuya_agent/auth.py` handles HMAC-SHA256 request signing and token lifecycle
-- `src/tuya_agent/devices.py`, `src/tuya_agent/logs.py`, `src/tuya_agent/scenes.py`, `src/tuya_agent/spaces.py`, `src/tuya_agent/events.py` are domain mixins attached to the client
+- `src/tuya_agent/devices.py`, `src/tuya_agent/logs.py`, `src/tuya_agent/scenes.py`, `src/tuya_agent/spaces.py`, `src/tuya_agent/events.py` are core domain mixins attached to the client
+- `src/tuya_agent/timers.py`, `src/tuya_agent/weather.py`, `src/tuya_agent/locks.py`, `src/tuya_agent/ir.py`, `src/tuya_agent/location.py`, `src/tuya_agent/firmware.py`, `src/tuya_agent/groups.py`, `src/tuya_agent/templates.py`, `src/tuya_agent/notifications.py` are extended domain mixins for timers, weather, smart locks, IR control, device location, firmware, device groups, scene templates, and push notifications
 - `src/tuya_agent/tools.py` provides the agent-facing tool registry and `dispatch()` entry point
 - `src/tuya_agent/storage.py` is the SQLite storage layer for persisting device logs with deduplication
 - `src/tuya_agent/collector.py` orchestrates periodic API-based log collection across all devices

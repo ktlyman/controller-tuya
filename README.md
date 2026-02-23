@@ -132,6 +132,68 @@ async with TuyaClient() as client:
 | Tool | Description |
 |---|---|
 | `resolve_space` | Resolve a space ID to its name and details |
+| `list_spaces` | List all Tuya spaces (locations/rooms) with pagination |
+
+### Device Timers
+
+| Tool | Description |
+|---|---|
+| `list_device_timers` | List all scheduled timer tasks for a device |
+| `add_device_timer` | Create a scheduled timer with day-of-week repetition |
+| `toggle_device_timer` | Enable or disable a specific timer task |
+
+### Weather
+
+| Tool | Description |
+|---|---|
+| `get_weather_forecast` | Get weather forecast for a Tuya city ID |
+| `get_weather_by_location` | Get current weather at a geographic coordinate |
+
+### Smart Locks
+
+| Tool | Description |
+|---|---|
+| `unlock_door` | Trigger a password-free unlock on a smart lock |
+| `remote_unlock_door` | Remote unlock via the smart-lock API |
+
+### IR Control
+
+| Tool | Description |
+|---|---|
+| `list_ir_remotes` | List virtual remotes on an infrared control hub |
+| `get_ir_remote_keys` | Get available keys (buttons) for a virtual IR remote |
+| `send_ir_command` | Send an IR key-press command through a virtual remote |
+
+### Device Location
+
+| Tool | Description |
+|---|---|
+| `get_device_location` | Get real-time GPS location of a tracking device |
+
+### Firmware
+
+| Tool | Description |
+|---|---|
+| `get_firmware_info` | Get firmware version info and available upgrades |
+
+### Device Groups
+
+| Tool | Description |
+|---|---|
+| `list_device_groups` | List device groups with pagination |
+| `get_device_group` | Get details of a device group |
+
+### Scene Templates
+
+| Tool | Description |
+|---|---|
+| `list_scene_templates` | List available pre-built scene templates |
+
+### Notifications
+
+| Tool | Description |
+|---|---|
+| `send_notification` | Send push notifications to Tuya app users |
 
 ## Module Overview
 
@@ -145,13 +207,22 @@ src/tuya_agent/
 ├── collector.py    # Periodic API-based log collection across all devices
 ├── devices.py      # Device list, details, status, control, sub-devices
 ├── events.py       # Real-time Pulsar WebSocket event subscription
+├── firmware.py     # Firmware version info and OTA upgrade triggering
+├── groups.py       # Device group CRUD and membership management
+├── ir.py           # Infrared control hub: categories, remotes, keys, commands
+├── location.py     # Device GPS location, track history, geofences
+├── locks.py        # Smart lock operations: password tickets, remote unlock
 ├── logs.py         # Historic event logs, DP report logs, aggregated statistics
+├── notifications.py # Push notifications to Tuya app users
 ├── scenes.py       # Scene listing and triggering (v2.0 Cloud API) plus automation management
-├── spaces.py       # Space (location) resolution
+├── spaces.py       # Space resolution, listing, creation, children, and resources
 ├── server.py       # FastAPI web server with REST endpoints and SSE for the dashboard
 ├── storage.py      # SQLite storage layer for persisting device logs with deduplication
+├── templates.py    # Scene template browsing and application
+├── timers.py       # Device timer/scheduled task CRUD (add, modify, toggle, delete)
 ├── tools.py        # Agent tool registry (JSON-schema descriptors) and dispatcher
 ├── watcher.py      # Streams real-time Pulsar WebSocket events into SQLite storage
+├── weather.py      # Weather forecast by city, coordinates, or IP
 └── static/
     └── index.html  # Self-contained HTML/CSS/JS dashboard
 ```
